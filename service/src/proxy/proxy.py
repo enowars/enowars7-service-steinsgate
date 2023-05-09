@@ -5,7 +5,7 @@ import logging
 import time
 from email.utils import formatdate
 from typing import Callable, Dict, Optional
-
+import re
 import aioquic
 from aioquic.asyncio import QuicConnectionProtocol, serve
 from aioquic.h3.connection import H3_ALPN, H3Connection
@@ -20,6 +20,7 @@ from aioquic.quic.configuration import QuicConfiguration
 from aioquic.quic.events import DatagramFrameReceived, ProtocolNegotiated, QuicEvent
 from aioquic.tls import SessionTicket
 
+from parse import parseConfig, proxy_config
 
 HttpConnection = H3Connection
 
@@ -64,32 +65,54 @@ class HttpRequestHandler:
             )
 
     async def run(self) -> None:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(60)
-        sock.connect(("127.0.0.1", 8080))
-        request = b"GET / HTTP/1.1\r\nHost:www.example.com\r\n\r\n"
-        sent = 0
-        sock.settimeout(60)
-        while sent < len(request):
-            sent = sent + sock.send(request[sent:])
-        response = b""
+        raw_path = self.scope["raw_path"].decode().strip()
+        method = self.scope["method"].strip()
         try:
-            sock.settimeout(60)
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(proxy_config["connect_timeout"])
+            sock.connect((proxy_config["upstream"].hostname, proxy_config["upstream"].port))
+            requestHeaders = ""
+            body = ""
+            for headerName, headerValue in self.scope["headers"]:
+                requestHeaders += headerName.decode() + ": " + headerValue.decode() + "\r\n"
+            requestHeaders += "Connection: close\r\n"
+            request = f"{method} {raw_path} HTTP/1.1\r\n{requestHeaders}\r\n{body}".encode()
+            sent = 0
+            sock.settimeout(proxy_config["write_timeout"])
+            while sent < len(request):
+                sent = sent + sock.send(request[sent:])
+            response = b""
+        except Exception as e:
+            print("Exception(send request):", e)
+            await self.ans(b"503", b"Service unavailable", {}, b"")
+            return
+        try:
+            sock.settimeout(proxy_config["read_timeout"])
             while True:
-                chunk = sock.recv(4096)
+                chunk = sock.recv(proxy_config["read_buffer_size"])
                 if len(chunk) == 0:
                     break
                 response = response + chunk
         except socket.timeout as e:
-            print("Time out!")
-        top, body = response.split(b"\r\n\r\n")
-        firstLine, responseHeadersRawNoSplit = top.split(b"\r\n", maxsplit=1)
-        responseHeadersRaw = responseHeadersRawNoSplit.split(b"\r\n")
-        httpVersion, code, msgCode = firstLine.split(b" ")
-        responseHeaders = []
-        for responseHeader in responseHeadersRaw:
-            k, v = responseHeader.split(b": ")
-            responseHeaders.append((k.lower(), v))
+            print("Exception(receive response):", e)
+            await self.ans(b"503", b"Service unavailable", {}, b"")
+            return
+        try:
+            top, body = response.split(b"\r\n\r\n")
+            firstLine, responseHeadersRawNoSplit = top.split(b"\r\n", maxsplit=1)
+            responseHeadersRaw = responseHeadersRawNoSplit.split(b"\r\n")
+            httpVersion, code, msgCode = firstLine.split(b" ", maxsplit=2)
+            responseHeaders = []
+            for responseHeader in responseHeadersRaw:
+                k, v = responseHeader.split(b": ")
+                responseHeaders.append((k.lower(), v))
+            await self.ans(code, msgCode, responseHeaders, body)
+        except Exception as e:
+            print("Exception(send response):", e)
+            await self.ans(b"503", b"Service unavailable", {}, b"")
+        
+
+    async def ans(self, code, msgCode, responseHeaders, body):
         await self.send({"type": "http.response.start", "status": code + b" " + msgCode, "headers": responseHeaders})
         await self.send({"type": "http.response.body", "body": body})
 
@@ -141,7 +164,6 @@ class HttpServerProtocol(QuicConnectionProtocol):
                     raw_path = value
                 elif header and not header.startswith(b":"):
                     headers.append((header, value))
-
             if b"?" in raw_path:
                 path_bytes, query_string = raw_path.split(b"?", maxsplit=1)
             else:
@@ -175,6 +197,10 @@ class HttpServerProtocol(QuicConnectionProtocol):
                 transmit=self.transmit,
             )
             self._handlers[event.stream_id] = handler
+            for denyRule in proxy_config["denyRules"]:
+                if denyRule["path"].match(raw_path.decode()):
+                    asyncio.ensure_future(handler.ans(denyRule["if_match_code"].encode(), b"proxy deny rule", {}, denyRule["if_match_body"].encode()))
+                    return
             asyncio.ensure_future(handler.run())
         elif (
             isinstance(event, (DataReceived, HeadersReceived))
@@ -197,7 +223,6 @@ class HttpServerProtocol(QuicConnectionProtocol):
             if event.data == b"quack":
                 self._quic.send_datagram_frame(b"quack-ack")
 
-        #  pass event to the HTTP layer
         if self._http is not None:
             for http_event in self._http.handle_event(event):
                 self.http_event_received(http_event)
@@ -267,6 +292,12 @@ if __name__ == "__main__":
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
         level=logging.INFO,
     )
+
+    parseConfig("./proxy.conf")
+
+    if proxy_config["upstream"].scheme != "http":
+        print("Protocol not supported!")
+        exit(1)
 
     configuration = QuicConfiguration(
         alpn_protocols=H3_ALPN + ["siduck"],

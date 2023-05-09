@@ -98,7 +98,7 @@ class HttpRequestHandler:
             await self.ans(b"503", b"Service unavailable", {}, b"")
             return
         try:
-            top, body = response.split(b"\r\n\r\n")
+            top, body = response.split(b"\r\n\r\n", maxsplit=1)
             firstLine, responseHeadersRawNoSplit = top.split(b"\r\n", maxsplit=1)
             responseHeadersRaw = responseHeadersRawNoSplit.split(b"\r\n")
             httpVersion, code, msgCode = firstLine.split(b" ", maxsplit=2)

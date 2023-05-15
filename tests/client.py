@@ -15,7 +15,6 @@ import wsproto
 import wsproto.events
 from aioquic.asyncio.client import connect
 from aioquic.asyncio.protocol import QuicConnectionProtocol
-from aioquic.h0.connection import H0_ALPN, H0Connection
 from aioquic.h3.connection import H3_ALPN, ErrorCode, H3Connection
 from aioquic.h3.events import (
     DataReceived,
@@ -35,10 +34,9 @@ except ImportError:
 
 logger = logging.getLogger("client")
 
-HttpConnection = Union[H0Connection, H3Connection]
+HttpConnection = H3Connection
 
 USER_AGENT = "aioquic/" + aioquic.__version__
-
 
 class URL:
     def __init__(self, url: str) -> None:
@@ -49,7 +47,6 @@ class URL:
         if parsed.query:
             self.full_path += "?" + parsed.query
         self.scheme = parsed.scheme
-
 
 class HttpRequest:
     def __init__(
@@ -67,62 +64,6 @@ class HttpRequest:
         self.method = method
         self.url = url
 
-
-class WebSocket:
-    def __init__(
-        self, http: HttpConnection, stream_id: int, transmit: Callable[[], None]
-    ) -> None:
-        self.http = http
-        self.queue: asyncio.Queue[str] = asyncio.Queue()
-        self.stream_id = stream_id
-        self.subprotocol: Optional[str] = None
-        self.transmit = transmit
-        self.websocket = wsproto.Connection(wsproto.ConnectionType.CLIENT)
-
-    async def close(self, code: int = 1000, reason: str = "") -> None:
-        """
-        Perform the closing handshake.
-        """
-        data = self.websocket.send(
-            wsproto.events.CloseConnection(code=code, reason=reason)
-        )
-        self.http.send_data(stream_id=self.stream_id,
-                            data=data, end_stream=True)
-        self.transmit()
-
-    async def recv(self) -> str:
-        """
-        Receive the next message.
-        """
-        return await self.queue.get()
-
-    async def send(self, message: str) -> None:
-        """
-        Send a message.
-        """
-        assert isinstance(message, str)
-
-        data = self.websocket.send(wsproto.events.TextMessage(data=message))
-        self.http.send_data(stream_id=self.stream_id,
-                            data=data, end_stream=False)
-        self.transmit()
-
-    def http_event_received(self, event: H3Event) -> None:
-        if isinstance(event, HeadersReceived):
-            for header, value in event.headers:
-                if header == b"sec-websocket-protocol":
-                    self.subprotocol = value.decode()
-        elif isinstance(event, DataReceived):
-            self.websocket.receive_data(event.data)
-
-        for ws_event in self.websocket.events():
-            self.websocket_event_received(ws_event)
-
-    def websocket_event_received(self, event: wsproto.events.Event) -> None:
-        if isinstance(event, wsproto.events.TextMessage):
-            self.queue.put_nowait(event.data)
-
-
 class HttpClient(QuicConnectionProtocol):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
@@ -131,64 +72,20 @@ class HttpClient(QuicConnectionProtocol):
         self._http: Optional[HttpConnection] = None
         self._request_events: Dict[int, Deque[H3Event]] = {}
         self._request_waiter: Dict[int, asyncio.Future[Deque[H3Event]]] = {}
-        self._websockets: Dict[int, WebSocket] = {}
+        self._http = H3Connection(self._quic)
 
-        if self._quic.configuration.alpn_protocols[0].startswith("hq-"):
-            self._http = H0Connection(self._quic)
-        else:
-            self._http = H3Connection(self._quic)
-
-    async def get(self, url: str, headers: Optional[Dict] = None) -> Deque[H3Event]:
-        """
-        Perform a GET request.
-        """
+    async def send_no_body(self, url: str, headers: Optional[Dict] = None, method: Optional[str] = None) -> Deque[H3Event]:
         return await self._request(
-            HttpRequest(method="GET", url=URL(url), headers=headers)
+            HttpRequest(method=method, url=URL(url), headers=headers)
         )
 
-    async def post(
-        self, url: str, data: bytes, headers: Optional[Dict] = None
+    async def send_with_body(
+        self, url: str, data: bytes, headers: Optional[Dict] = None, method: Optional[str] = None
     ) -> Deque[H3Event]:
-        """
-        Perform a POST request.
-        """
         return await self._request(
-            HttpRequest(method="POST", url=URL(url),
+            HttpRequest(method=method, url=URL(url),
                         content=data, headers=headers)
         )
-
-    async def websocket(
-        self, url: str, subprotocols: Optional[List[str]] = None
-    ) -> WebSocket:
-        """
-        Open a WebSocket.
-        """
-        request = HttpRequest(method="CONNECT", url=URL(url))
-        stream_id = self._quic.get_next_available_stream_id()
-        websocket = WebSocket(
-            http=self._http, stream_id=stream_id, transmit=self.transmit
-        )
-
-        self._websockets[stream_id] = websocket
-
-        headers = [
-            (b":method", b"CONNECT"),
-            (b":scheme", b"https"),
-            (b":authority", request.url.authority.encode()),
-            (b":path", request.url.full_path.encode()),
-            (b":protocol", b"websocket"),
-            (b"user-agent", USER_AGENT.encode()),
-            (b"sec-websocket-version", b"13"),
-        ]
-        if subprotocols:
-            headers.append(
-                (b"sec-websocket-protocol", ", ".join(subprotocols).encode())
-            )
-        self._http.send_headers(stream_id=stream_id, headers=headers)
-
-        self.transmit()
-
-        return websocket
 
     def http_event_received(self, event: H3Event) -> None:
         if isinstance(event, (HeadersReceived, DataReceived)):
@@ -200,11 +97,6 @@ class HttpClient(QuicConnectionProtocol):
                     request_waiter = self._request_waiter.pop(stream_id)
                     request_waiter.set_result(
                         self._request_events.pop(stream_id))
-
-            elif stream_id in self._websockets:
-                # websocket
-                websocket = self._websockets[stream_id]
-                websocket.http_event_received(event)
 
             elif event.push_id in self.pushes:
                 # push
@@ -228,7 +120,7 @@ class HttpClient(QuicConnectionProtocol):
                 (b":method", request.method.encode()),
                 (b":scheme", request.url.scheme.encode()),
                 (b":authority", request.url.authority.encode()),
-                (b":path", b"/ HTTP/1.1\r\n\r\nGET "+request.url.full_path.encode()),
+                (b":path", request.url.full_path.encode()),
                 (b"user-agent", USER_AGENT.encode()),
             ]
             + [(k.encode(), v.encode()) for (k, v) in request.headers.items()],
@@ -250,6 +142,8 @@ class HttpClient(QuicConnectionProtocol):
 async def perform_http_request(
     client: HttpClient,
     url: str,
+    headers: dict,
+    method: str,
     data: Optional[str],
     include: bool,
     output_dir: Optional[str],
@@ -257,19 +151,20 @@ async def perform_http_request(
     # perform request
     start = time.time()
     if data is not None:
+        method = "POST" if method == None else method
         data_bytes = data.encode()
-        http_events = await client.post(
+        http_events = await client.send_with_body(
             url,
             data=data_bytes,
-            headers={
-                "content-length": str(len(data_bytes)),
-                "content-type": "application/x-www-form-urlencoded",
-            },
+            headers=dict({
+                "content-length": str(len(data_bytes)) if "content-length" not in headers else headers["content-length"],
+                "content-type": "application/x-www-form-urlencoded" if "content-type" not in headers else headers["content-type"],
+            }, **headers),
+            method=method
         )
-        method = "POST"
     else:
-        http_events = await client.get(url)
-        method = "GET"
+        method = "GET" if method == None else method
+        http_events = await client.send_no_body(url, headers=headers, method=method)
     elapsed = time.time() - start
 
     # print speed
@@ -330,7 +225,6 @@ def process_http_pushes(
 def write_response(
     http_events: Deque[H3Event], output_file: BinaryIO, include: bool
 ) -> None:
-    print("called")
     for http_event in http_events:
         if isinstance(http_event, HeadersReceived) and include:
             headers = b""
@@ -338,17 +232,13 @@ def write_response(
                 headers += k + b": " + v + b"\r\n"
             if headers:
                 output_file.write(headers + b"\r\n")
-                print("HEADERS:", headers)
+                print(headers.decode())
         elif isinstance(http_event, DataReceived):
             output_file.write(http_event.data)
-            print("DATA:", http_event.data)
+            print(http_event.data.decode())
 
 
 def save_session_ticket(ticket: SessionTicket) -> None:
-    """
-    Callback which is invoked by the TLS engine when a new session ticket
-    is received.
-    """
     logger.info("New session ticket received")
     if args.session_ticket:
         with open(args.session_ticket, "wb") as fp:
@@ -363,18 +253,19 @@ async def main(
     output_dir: Optional[str],
     local_port: int,
     zero_rtt: bool,
+    headers,
+    method
 ) -> None:
     # parse URL
     parsed = urlparse(urls[0])
     assert parsed.scheme in (
         "https",
-        "wss",
-    ), "Only https:// or wss:// URLs are supported."
+    ), "Only https:// URLs are supported."
     host = parsed.hostname
     if parsed.port is not None:
         port = parsed.port
     else:
-        port = 443
+        port = 4433
 
     # check validity of 2nd urls and later.
     for i in range(1, len(urls)):
@@ -405,37 +296,23 @@ async def main(
         wait_connected=not zero_rtt,
     ) as client:
         client = cast(HttpClient, client)
+        coros = [
+            perform_http_request(
+                client=client,
+                url=url,
+                data=data,
+                include=include,
+                output_dir=output_dir,
+                headers=headers,
+                method=method
+            )
+            for url in urls
+        ]
+        await asyncio.gather(*coros)
 
-        if parsed.scheme == "wss":
-            ws = await client.websocket(urls[0], subprotocols=["chat", "superchat"])
-
-            # send some messages and receive reply
-            for i in range(2):
-                message = "Hello {}, WebSocket!".format(i)
-                print("> " + message)
-                await ws.send(message)
-
-                message = await ws.recv()
-                print("< " + message)
-
-            await ws.close()
-        else:
-            # perform request
-            coros = [
-                perform_http_request(
-                    client=client,
-                    url=url,
-                    data=data,
-                    include=include,
-                    output_dir=output_dir,
-                )
-                for url in urls
-            ]
-            await asyncio.gather(*coros)
-
-            # process http pushes
-            process_http_pushes(
-                client=client, include=include, output_dir=output_dir)
+        # process http pushes
+        process_http_pushes(
+            client=client, include=include, output_dir=output_dir)
         client._quic.close(error_code=ErrorCode.H3_NO_ERROR)
 
 
@@ -461,6 +338,12 @@ if __name__ == "__main__":
         "-d", "--data", type=str, help="send the specified data in a POST request"
     )
     parser.add_argument(
+        "-x", "--method", type=str, help="change the request method"
+    )
+    parser.add_argument(
+        "-H", "--header", type=str, help="send a header value", action='append'
+    )
+    parser.add_argument(
         "-i",
         "--include",
         action="store_true",
@@ -482,8 +365,6 @@ if __name__ == "__main__":
         action="store_true",
         help="do not validate server certificate",
     )
-    parser.add_argument(
-        "--legacy-http", action="store_true", help="use HTTP/0.9")
     parser.add_argument(
         "--output-dir",
         type=str,
@@ -532,7 +413,7 @@ if __name__ == "__main__":
 
     # prepare configuration
     configuration = QuicConfiguration(
-        is_client=True, alpn_protocols=H0_ALPN if args.legacy_http else H3_ALPN
+        is_client=True, alpn_protocols=H3_ALPN
     )
     if args.ca_certs:
         configuration.load_verify_locations(args.ca_certs)
@@ -559,6 +440,11 @@ if __name__ == "__main__":
 
     if uvloop is not None:
         uvloop.install()
+
+    headers = {}
+    for k in args.header:
+        key, val = k.split(":")
+        headers[key.lower()] = val
     asyncio.run(
         main(
             configuration=configuration,
@@ -568,5 +454,7 @@ if __name__ == "__main__":
             output_dir=args.output_dir,
             local_port=args.local_port,
             zero_rtt=args.zero_rtt,
+            headers=headers,
+            method=args.method
         )
     )

@@ -67,12 +67,25 @@ class HttpRequestHandler:
     async def run(self) -> None:
         raw_path = self.scope["raw_path"].decode().strip()
         method = self.scope["method"].strip()
+        receivedBody = b""
+        try:
+            async with asyncio.timeout(proxy_config["read_timeout"]):
+                receivedMsg = await self.receive()
+                if "body" in receivedMsg:
+                    receivedBody += receivedMsg["body"]
+                while "more_body" in receivedMsg and receivedMsg["more_body"]:
+                    receivedMsg = await self.receive()
+                    if "body" in receivedMsg:
+                        receivedBody += receivedMsg["body"]
+        except Exception as e:
+            print("Exception (receiving body):", e)
+            await self.ans(b"400", b"Bad request.....", {}, b"")
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.settimeout(proxy_config["connect_timeout"])
             sock.connect((proxy_config["upstream"].hostname, proxy_config["upstream"].port))
             requestHeaders = ""
-            body = ""
+            body = receivedBody.decode()
             for headerName, headerValue in self.scope["headers"]:
                 requestHeaders += headerName.decode() + ": " + headerValue.decode() + "\r\n"
             requestHeaders += "Connection: close\r\n"
@@ -101,14 +114,14 @@ class HttpRequestHandler:
             top, body = response.split(b"\r\n\r\n", maxsplit=1)
             firstLine, responseHeadersRawNoSplit = top.split(b"\r\n", maxsplit=1)
             responseHeadersRaw = responseHeadersRawNoSplit.split(b"\r\n")
-            httpVersion, code, msgCode = firstLine.split(b" ", maxsplit=2)
+            _, code, msgCode = firstLine.split(b" ", maxsplit=2)
             responseHeaders = []
             for responseHeader in responseHeadersRaw:
                 k, v = responseHeader.split(b": ")
                 responseHeaders.append((k.lower(), v))
             await self.ans(code, msgCode, responseHeaders, body)
         except Exception as e:
-            print("Exception(send response):", e)
+            print("Exception(send response):", e, response)
             await self.ans(b"503", b"Service unavailable", {}, b"")
         
 
@@ -290,7 +303,7 @@ if __name__ == "__main__":
 
     logging.basicConfig(
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
-        level=logging.INFO,
+        level=logging.DEBUG,
     )
 
     parseConfig("./proxy.conf")

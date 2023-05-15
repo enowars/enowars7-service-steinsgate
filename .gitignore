@@ -5,10 +5,12 @@ cert.pem
 __pycache__/
 *.py[cod]
 *$py.class
-
+node_modules/
+usersdb.sqlite
+.DS_Store
 # C extensions
 *.so
-
+tmp
 # Distribution / packaging
 .Python
 build/

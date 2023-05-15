@@ -1,0 +1,13 @@
+version: "3.9"
+services:
+  backend:
+    build: backend/
+    volumes:
+      # - ./backend/node_modules:/app/node_modules
+      - ./backend/usersdb.sqlite:/app/usersdb.sqlite
+  proxy:
+    build: proxy/
+    links:
+      - "backend:backend"
+    ports:
+      - "4433:4433/udp"

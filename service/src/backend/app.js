@@ -69,7 +69,7 @@ let db = new sqlite3.Database(DBSOURCE, (err) => {
 
 module.exports = db;
 
-app.use(express.urlencoded());
+app.use(express.urlencoded({extended: true}));
 app.use(morgan('combined'));
 
 app.use('/', router)

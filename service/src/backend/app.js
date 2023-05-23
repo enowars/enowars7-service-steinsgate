@@ -76,10 +76,10 @@ app.use('/', router)
 
 router.get("/", (_, res) => res.send("WORKING"));
 
-router.use("/user/:id", auth);
-router.get("/user/:id", (req, res, _) => {
-  var sql = "SELECT u.username, u.salt, GROUP_CONCAT(p.phone) as phones FROM users u LEFT JOIN phones p ON p.user_id=u.id WHERE u.id = ? GROUP BY u.id";
-  db.all(sql, req.params.id, (err, rows) => {
+router.use("/user/:username", auth);
+router.get("/user/:username", (req, res, _) => {
+  var sql = "SELECT u.username, u.salt, GROUP_CONCAT(p.phone) as phones FROM users u LEFT JOIN phones p ON p.user_id=u.id WHERE u.username = ? GROUP BY u.username";
+  db.all(sql, req.params.username, (err, rows) => {
     if (err) {
       res.status(400).json({ error: err.message });
       return;
@@ -116,7 +116,7 @@ router.post("/register", async (req, res) => {
       if (result.length === 0) {
         var salt = bcrypt.genSaltSync(10);
         var sql =
-          "INSERT INTO users (id, username, password, salt) VALUES (?,?,?,?,?,?)";
+          "INSERT INTO users (id, username, password, salt) VALUES (?,?,?,?)";
         var params = [
           crypto.randomUUID(),
           username,
@@ -132,9 +132,9 @@ router.post("/register", async (req, res) => {
         return res.status(404).json({"status": "error", "message": "User Already Exist. Please Login"});
       }
     });
-
     return res.status(201).json({"status": "success"});
   } catch (err) {
+    console.log("ALOOOO", err)
     return res.status(400).json({"status": "error", "message":err});
   }
 });

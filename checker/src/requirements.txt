@@ -1,0 +1,6 @@
+eventlet
+beautifulsoup4
+enochecker3
+aioquic
+python_dateutil
+https://github.com/benoitc/gunicorn/archive/refs/heads/master.zip#egg=gunicorn==20.1.0

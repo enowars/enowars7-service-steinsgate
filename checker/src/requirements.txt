@@ -1,0 +1,6 @@
+beautifulsoup4
+aioquic
+enochecker3==0.8.1
+uvicorn
+gunicorn
+faker

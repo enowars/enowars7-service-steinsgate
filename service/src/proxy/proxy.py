@@ -14,7 +14,6 @@ from aioquic.h3.events import (
     DataReceived,
     H3Event,
     HeadersReceived,
-    WebTransportStreamDataReceived,
 )
 from aioquic.quic.configuration import QuicConfiguration
 from aioquic.quic.events import DatagramFrameReceived, ProtocolNegotiated, QuicEvent
@@ -66,7 +65,11 @@ class HttpRequestHandler:
 
     async def run(self) -> None:
         raw_path = self.scope["raw_path"].decode().strip()
-        method = self.scope["method"].strip()
+        for denyRule in proxy_config["denyRules"]:
+            if denyRule["path"].match(raw_path):
+                await self.ans(denyRule["if_match_code"].encode(), b"proxy deny rule", {}, denyRule["if_match_body"].encode())
+                return
+        method = self.scope["method"]
         receivedBody = b""
         try:
             async with asyncio.timeout(proxy_config["read_timeout"]):
@@ -80,6 +83,7 @@ class HttpRequestHandler:
         except Exception as e:
             print("Exception (receiving body):", e)
             await self.ans(b"400", b"Bad request.....", {}, b"")
+            return
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.settimeout(proxy_config["connect_timeout"])
@@ -104,6 +108,7 @@ class HttpRequestHandler:
             while True:
                 chunk = sock.recv(proxy_config["read_buffer_size"])
                 if len(chunk) == 0:
+                    sock.close()
                     break
                 response = response + chunk
         except socket.timeout as e:
@@ -123,6 +128,7 @@ class HttpRequestHandler:
         except Exception as e:
             print("Exception(send response):", e, response)
             await self.ans(b"503", b"Service unavailable", {}, b"")
+            return
         
 
     async def ans(self, code, msgCode, responseHeaders, body):
@@ -210,10 +216,6 @@ class HttpServerProtocol(QuicConnectionProtocol):
                 transmit=self.transmit,
             )
             self._handlers[event.stream_id] = handler
-            for denyRule in proxy_config["denyRules"]:
-                if denyRule["path"].match(raw_path.decode()):
-                    asyncio.ensure_future(handler.ans(denyRule["if_match_code"].encode(), b"proxy deny rule", {}, denyRule["if_match_body"].encode()))
-                    return
             asyncio.ensure_future(handler.run())
         elif (
             isinstance(event, (DataReceived, HeadersReceived))
@@ -224,14 +226,11 @@ class HttpServerProtocol(QuicConnectionProtocol):
         elif isinstance(event, DatagramReceived):
             handler = self._handlers[event.flow_id]
             handler.http_event_received(event)
-        elif isinstance(event, WebTransportStreamDataReceived):
-            handler = self._handlers[event.session_id]
-            handler.http_event_received(event)
 
     def quic_event_received(self, event: QuicEvent) -> None:
         if isinstance(event, ProtocolNegotiated):
             if event.alpn_protocol in H3_ALPN:
-                self._http = H3Connection(self._quic, enable_webtransport=True)
+                self._http = H3Connection(self._quic, enable_webtransport=False)
         elif isinstance(event, DatagramFrameReceived):
             if event.data == b"quack":
                 self._quic.send_datagram_frame(b"quack-ack")
@@ -265,6 +264,7 @@ async def main(
         create_protocol=HttpServerProtocol,
         session_ticket_fetcher=session_ticket_store.pop,
         session_ticket_handler=session_ticket_store.add,
+        retry=True
     )
     loop = asyncio.get_running_loop()
     try:

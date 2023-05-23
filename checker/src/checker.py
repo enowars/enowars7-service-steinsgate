@@ -115,7 +115,7 @@ async def getflag(task: GetflagCheckerTaskMessage, logger: LoggerAdapter, db: Ch
         token = await db.get("info")
     except KeyError:
         raise MumbleException("Database info missing")
-    r = await do_profile(task, logger, "/profile", token=token)
+    r = await do_profile(task, logger, token=token)
     if "phones" in r:
         phones = r["phones"]
         assert_in(task.flag, phones, "Flag missing")

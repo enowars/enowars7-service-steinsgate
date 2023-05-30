@@ -121,7 +121,7 @@ router.post("/register", async (req, res) => {
         var params = [
           crypto.randomUUID(),
           username,
-          password,
+          bcrypt.hashSync(password, salt),
           salt,
         ];
         db.run(sql, params, function (err, _) {

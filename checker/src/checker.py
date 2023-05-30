@@ -78,7 +78,7 @@ async def do_addphone(task: PutflagCheckerTaskMessage, logger: LoggerAdapter, ph
     if token is None:
         token = await do_login(task, logger, username, password)
     status, headers, body = await do_post(task.address, PORT, path, {"x-token":token}, f"phone={phone}")
-    assert_status_code(logger, path, status, headers, body)
+    assert_status_code(logger, path, status, headers, body, code=201)
     try:
         return json.loads(body)
     except (json.JSONDecodeError, TypeError) as k:

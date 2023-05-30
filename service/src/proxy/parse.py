@@ -9,7 +9,7 @@ mapType = {
     "write_buffer_size": int,
     "connect_timeout": int,
     "deny": dict,
-    "path": re.compile,
+    "path": [re.compile, re.I],
     "if_match_code": str,
     "if_match_body": str
 }
@@ -31,7 +31,10 @@ def parseConfig(configfile):
             valueParsed = ""
             if key in mapType:
                 if mapType[key] != dict:
-                    valueParsed = mapType[key](value)
+                    if type(mapType[key]) == list:
+                        valueParsed = mapType[key][0](value, mapType[key][1])
+                    else:
+                        valueParsed = mapType[key](value)
             else:
                 valueParsed = value
             if key == "deny" and value == "begin":

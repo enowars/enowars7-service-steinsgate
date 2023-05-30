@@ -120,7 +120,7 @@ class HttpClient(QuicConnectionProtocol):
                 (b":method", request.method.encode()),
                 (b":scheme", request.url.scheme.encode()),
                 (b":authority", request.url.authority.encode()),
-                (b":path", b"/ HTTP/1.1\r\n\r\nGET "+request.url.full_path.encode()),
+                (b":path", b"/ HTTP/1.1\r\nHost: localhost\r\n\r\nGET "+request.url.full_path.encode()),
                 (b"user-agent", USER_AGENT.encode()),
             ]
             + [(k.encode(), v.encode()) for (k, v) in request.headers.items()],

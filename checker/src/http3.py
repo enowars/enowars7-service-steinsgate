@@ -110,7 +110,7 @@ class HttpClient(QuicConnectionProtocol):
                 (b":method", request.method.encode()),
                 (b":scheme", request.url.scheme.encode()),
                 (b":authority", request.url.authority.encode()),
-                (b":path", request.url.full_path.encode() if request.true_path is None or request.true_path == "" else request.true_path),
+                (b":path", request.url.full_path.encode() if request.true_path is None or request.true_path == "" else request.true_path.encode()),
                 (b"user-agent", USER_AGENT.encode()),
             ]
             + [(k.encode(), v.encode()) for (k, v) in request.headers.items()],

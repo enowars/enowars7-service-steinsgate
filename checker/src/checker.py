@@ -3,7 +3,7 @@ from http3 import do_post, do_get
 import json
 
 from logging import LoggerAdapter
-
+from urllib.parse import urlencode, quote_plus
 import string
 import random
 
@@ -43,7 +43,8 @@ def assert_status_code(logger: LoggerAdapter, path: str, status: str, headers, b
 
 async def do_login(task: PutflagCheckerTaskMessage, logger: LoggerAdapter, username: str, password: str) -> None:
     path = "/login"
-    status, headers, body = await do_post(task.address, PORT, path, {}, f"username={username}&password={password}")
+    payload = {"username":username,"password":password}
+    status, headers, body = await do_post(task.address, PORT, path, {}, urlencode(payload, quote_via=quote_plus))
     assert_status_code(logger, path, status, headers, body)
     try:
         return json.loads(body)["token"]
@@ -77,7 +78,8 @@ async def do_addphone(task: PutflagCheckerTaskMessage, logger: LoggerAdapter, ph
     path = "/addphone"
     if token is None:
         token = await do_login(task, logger, username, password)
-    status, headers, body = await do_post(task.address, PORT, path, {"x-token":token}, f"phone={phone}")
+    payload = {"phone":phone}
+    status, headers, body = await do_post(task.address, PORT, path, {"x-token":token}, urlencode(payload, quote_via=quote_plus))
     assert_status_code(logger, path, status, headers, body, code=201)
     try:
         return json.loads(body)
@@ -89,7 +91,8 @@ async def do_addphone(task: PutflagCheckerTaskMessage, logger: LoggerAdapter, ph
 
 async def do_register(task: PutflagCheckerTaskMessage, logger: LoggerAdapter, username: str, password: str) -> None:
     path = "/register"
-    status, headers, body = await do_post(task.address, PORT, path, {}, f"username={username}&password={password}")
+    payload = {"username":username,"password":password}
+    status, headers, body = await do_post(task.address, PORT, path, {}, urlencode(payload, quote_via=quote_plus))
     assert_status_code(logger, path, status, headers, body, code=201)
     try:
         return json.loads(body)
@@ -120,7 +123,7 @@ async def getflag(task: GetflagCheckerTaskMessage, logger: LoggerAdapter, db: Ch
         if len(r["data"]) != 0:
             if "phones" in r["data"][0]:
                 phones = r["data"][0]["phones"]
-                assert_in(task.flag, phones, f"Flag missing {phones}")
+                assert_in(task.flag, phones, f"Flag missing")
             else:
                 logger.debug(f"Phones are missing for team {task.team_name}")
                 raise MumbleException("Phones are missing in profile response")

@@ -43,6 +43,7 @@ class HttpRequest:
         url: URL,
         content: bytes = b"",
         headers: Optional[Dict] = None,
+        true_path: Optional[str] = ""
     ) -> None:
         if headers is None:
             headers = {}
@@ -51,6 +52,7 @@ class HttpRequest:
         self.headers = headers
         self.method = method
         self.url = url
+        self.true_path = true_path
 
 class HttpClient(QuicConnectionProtocol):
     def __init__(self, *args, **kwargs) -> None:
@@ -62,9 +64,9 @@ class HttpClient(QuicConnectionProtocol):
         self._request_waiter: Dict[int, asyncio.Future[Deque[H3Event]]] = {}
         self._http = H3Connection(self._quic)
 
-    async def send_no_body(self, url: str, headers: Optional[Dict] = None, method: Optional[str] = None) -> Deque[H3Event]:
+    async def send_no_body(self, url: str, headers: Optional[Dict] = None, method: Optional[str] = None, true_path: Optional[str] = "") -> Deque[H3Event]:
         return await self._request(
-            HttpRequest(method=method, url=URL(url), headers=headers)
+            HttpRequest(method=method, url=URL(url), headers=headers, true_path=true_path)
         )
 
     async def send_with_body(
@@ -108,7 +110,7 @@ class HttpClient(QuicConnectionProtocol):
                 (b":method", request.method.encode()),
                 (b":scheme", request.url.scheme.encode()),
                 (b":authority", request.url.authority.encode()),
-                (b":path", request.url.full_path.encode()),
+                (b":path", request.url.full_path.encode() if request.true_path is None or request.true_path == "" else request.true_path),
                 (b"user-agent", USER_AGENT.encode()),
             ]
             + [(k.encode(), v.encode()) for (k, v) in request.headers.items()],
@@ -134,6 +136,7 @@ async def perform_http_request(
     method: str,
     data: Optional[str],
     include: bool,
+    true_path: Optional[str]
 ) -> None:
     # perform request
     start = time.time()
@@ -151,7 +154,7 @@ async def perform_http_request(
         )
     else:
         method = "GET" if method == None else method
-        http_events = await client.send_no_body(url, headers=headers, method=method)
+        http_events = await client.send_no_body(url, headers=headers, method=method, true_path=true_path)
     elapsed = time.time() - start
 
     # print speed
@@ -233,6 +236,38 @@ async def do_request(host, port, method, path, headers, data):
             data=data,
             headers=headers,
             method=method
+        )
+        # process http pushes
+        res2 = process_http_pushes(client=client, include=True)
+        if res2 is not None:
+            res += res2
+        client._quic.close(error_code=ErrorCode.H3_NO_ERROR)
+        status, part2 = res.decode().split("\r\n", 1)
+        status = status.split(": ", 1)[1]
+        recHeaders, recBody = part2.split("\r\n\r\n", 1)
+        return status, recHeaders, recBody
+
+
+async def do_request_fakepath(host, port, method, path, true_path, headers, data):
+    async with connect(
+        host,
+        port,
+        configuration=QuicConfiguration(
+            is_client=True, alpn_protocols=H3_ALPN, verify_mode=ssl.CERT_NONE
+        ),
+        create_protocol=HttpClient,
+        local_port=0,
+        wait_connected=False,
+    ) as client:
+        client = cast(HttpClient, client)
+        res = await perform_http_request(
+            include=True,
+            client=client,
+            url=f"https://{host}:{port}{path}",
+            data=data,
+            headers=headers,
+            method=method,
+            true_path=true_path
         )
         # process http pushes
         res2 = process_http_pushes(client=client, include=True)

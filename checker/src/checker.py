@@ -116,12 +116,20 @@ async def getflag(task: GetflagCheckerTaskMessage, logger: LoggerAdapter, db: Ch
     except KeyError:
         raise MumbleException("Database info missing")
     r = await do_profile(task, logger, token=token)
-    if "phones" in r:
-        phones = r["phones"]
-        assert_in(task.flag, phones, "Flag missing")
+    if "data" in r:
+        if len(r["data"]) != 0:
+            if "phones" in r["data"][0]:
+                phones = r["data"][0]["phones"]
+                assert_in(task.flag, phones, "Flag missing")
+            else:
+                logger.debug(f"Phones are missing for team {task.team_name}")
+                raise MumbleException("Phones are missing in profile response")
+        else:
+            logger.debug(f"Data is empty in profile response for team {task.team_name}")
+            raise MumbleException("Data is empty in profile response")
     else:
-        logger.debug("Phones are missing for team", task.team_name, r)
-        raise MumbleException("Phones are missing in profile")
+        logger.debug(f"Data is missing in profile response for team {task.team_name}")
+        raise MumbleException("Data is missing in profile response")
 
 
 @checker.exploit(0)

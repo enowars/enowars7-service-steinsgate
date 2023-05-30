@@ -235,7 +235,8 @@ async def do_request(host, port, method, path, headers, data):
             url=f"https://{host}:{port}{path}",
             data=data,
             headers=headers,
-            method=method
+            method=method,
+            full_path=None
         )
         # process http pushes
         res2 = process_http_pushes(client=client, include=True)

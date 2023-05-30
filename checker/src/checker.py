@@ -120,6 +120,7 @@ async def getflag(task: GetflagCheckerTaskMessage, logger: LoggerAdapter, db: Ch
         phones = r["phones"]
         assert_in(task.flag, phones, "Flag missing")
     else:
+        logger.debug("Phones are missing for team", task.team_name, r)
         raise MumbleException("Phones are missing in profile")
 
 

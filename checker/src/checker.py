@@ -61,7 +61,7 @@ async def do_login(task: PutflagCheckerTaskMessage, logger: LoggerAdapter, usern
 async def do_profile(task: PutflagCheckerTaskMessage, logger: LoggerAdapter, token: str = None, username: str = None, password: str = None) -> None:
     path = "/profile"
     if token is None:
-        token = await do_login(username, password)
+        token = await do_login(task, logger, username, password)
     status, headers, body = await do_get(task.address, PORT, path, {"x-token":token})
     assert_status_code(logger, path, status, headers, body)
     try:
@@ -76,7 +76,7 @@ async def do_profile(task: PutflagCheckerTaskMessage, logger: LoggerAdapter, tok
 async def do_addphone(task: PutflagCheckerTaskMessage, logger: LoggerAdapter, phone: str, token: str = None, username: str = None, password: str = None) -> None:
     path = "/addphone"
     if token is None:
-        token = await do_login(username, password)
+        token = await do_login(task, logger, username, password)
     status, headers, body = await do_post(task.address, PORT, path, {"x-token":token}, f"phone={phone}")
     assert_status_code(logger, path, status, headers, body)
     try:
@@ -104,7 +104,7 @@ async def putflag(task: PutflagCheckerTaskMessage, logger: LoggerAdapter, db: Ch
     username = noise(10, 20)
     password = noise(10, 20)
     await do_register(task, logger, username, password)
-    token = await do_login(logger, username, password)
+    token = await do_login(task, logger, username, password)
     await do_addphone(task, logger, task.flag, token=token)
     await db.set("info", token)
     return username

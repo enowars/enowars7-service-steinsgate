@@ -110,6 +110,7 @@ router.post("/register", async (req, res) => {
     var sql = "SELECT * FROM users WHERE username = ?";
     await db.all(sql, username, (err, result) => {
       if (err) {
+        console.log("Error on query ", sql, err.message);
         return res.status(402).json({ error: err.message });
       }
 
@@ -125,14 +126,15 @@ router.post("/register", async (req, res) => {
         ];
         db.run(sql, params, function (err, _) {
           if (err) {
+            console.log("Error on query ", sql, err.message);
             return res.status(400).json({ error: err.message });
           }
+          return res.status(201).json({"status": "success"});
         });
       } else {
         return res.status(404).json({"status": "error", "message": "User Already Exist. Please Login"});
       }
     });
-    return res.status(201).json({"status": "success"});
   } catch (err) {
     console.log("ALOOOO", err)
     return res.status(400).json({"status": "error", "message":err});

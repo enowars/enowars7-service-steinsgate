@@ -90,7 +90,7 @@ async def do_addphone(task: PutflagCheckerTaskMessage, logger: LoggerAdapter, ph
 async def do_register(task: PutflagCheckerTaskMessage, logger: LoggerAdapter, username: str, password: str) -> None:
     path = "/register"
     status, headers, body = await do_post(task.address, PORT, path, {}, f"username={username}&password={password}")
-    assert_status_code(logger, path, status, headers, body)
+    assert_status_code(logger, path, status, headers, body, code=201)
     try:
         return json.loads(body)
     except (json.JSONDecodeError, TypeError) as k:

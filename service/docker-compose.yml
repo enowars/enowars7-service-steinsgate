@@ -2,6 +2,8 @@ version: "3.9"
 services:
   backend:
     build: src/backend/
+    volumes:
+      - ./backend/usersdb.sqlite:/service/backend/usersdb.sqlite:rw
   proxy:
     build: src/proxy/
     links:

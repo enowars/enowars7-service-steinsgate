@@ -442,9 +442,10 @@ if __name__ == "__main__":
         uvloop.install()
 
     headers = {}
-    for k in args.header:
-        key, val = k.split(":")
-        headers[key.lower()] = val
+    if args.header is not None:
+        for k in args.header:
+            key, val = k.split(":")
+            headers[key.lower()] = val
     asyncio.run(
         main(
             configuration=configuration,

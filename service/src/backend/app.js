@@ -4,7 +4,7 @@ const router = express.Router()
 var sqlite3 = require("sqlite3").verbose();
 var jwt = require("jsonwebtoken");
 var bcrypt = require("bcryptjs");
-const DBSOURCE = "usersdb.sqlite";
+const DBSOURCE = "/service/persist/usersdb.sqlite";
 const auth = require("./middleware");
 const crypto = require("crypto");
 var morgan = require('morgan')
@@ -27,23 +27,9 @@ let db = new sqlite3.Database(DBSOURCE, (err) => {
         salt text
       );`,
       (err) => {
-        if (!err) {
-          var insert = "INSERT INTO users (id, username, password, salt) VALUES (?,?,?,?)";
-          var salt = bcrypt.genSaltSync(10);
-          db.run(insert, [
-            user1_id,
-            "user1",
-            bcrypt.hashSync("user1", salt),
-            salt
-          ]);
-
-          var salt = bcrypt.genSaltSync(10);
-          db.run(insert, [
-            user2_id,
-            "user2",
-            bcrypt.hashSync("user2", salt),
-            salt
-          ]);
+        if(err){
+          console.log("Got error:", err);
+          throw err;
         }
       }
     );
@@ -52,16 +38,9 @@ let db = new sqlite3.Database(DBSOURCE, (err) => {
       user_id text,
       phone text NOT NULL
     );`, (err) => {
-      if(!err){
-        var insert = "INSERT INTO phones (user_id, phone) VALUES (?,?)";
-        db.run(insert, [
-          user1_id,
-          "ENOflag1",
-        ]);
-        db.run(insert, [
-          user2_id,
-          "ENOflag2"
-        ]);
+      if(err){
+        console.log("Got error:", err);
+        throw err;
       }
     })
   }
@@ -78,6 +57,10 @@ router.get("/", (_, res) => res.send("WORKING"));
 
 router.use("/user/:username", auth);
 router.get("/user/:username", (req, res, _) => {
+  if(typeof req.params.username !== "string"){
+    res.status(400).json({ error: "username must be a string" });
+    return;
+  }
   var sql = "SELECT u.username, u.salt, GROUP_CONCAT(p.phone) as phones FROM users u LEFT JOIN phones p ON p.user_id=u.id WHERE u.username = ? GROUP BY u.username";
   db.all(sql, req.params.username, (err, rows) => {
     if (err) {
@@ -96,13 +79,18 @@ router.post("/register", async (req, res) => {
   try {
     const { username, password } = req.body;
 
-    if (!username) {
+    if ( !username || typeof username !== "string" ) {
       errors.push("username is missing");
     }
-    if (!password) {
+    if ( !password || typeof password !== "string" ) {
       errors.push("password is missing");
     }
-
+    if ( username.length < 3 || username.length > 30 ) {
+      errors.push("username must be between 3 and 30 characters");
+    }
+    if ( password.length < 3 || password.length > 30 ) {
+      errors.push("password must be between 3 and 30 characters");
+    }
     if (errors.length) {
       return res.status(400).json({ error: errors.join(",") });
     }
@@ -136,8 +124,7 @@ router.post("/register", async (req, res) => {
       }
     });
   } catch (err) {
-    console.log("ALOOOO", err)
-    return res.status(400).json({"status": "error", "message":err});
+    return res.status(400).json({"status": "error", "message":err.message});
   }
 });
 
@@ -147,8 +134,12 @@ router.post("/addphone", async (req, res) => {
   try {
     const { phone } = req.body;
 
-    if (!phone) {
+    if (!phone || typeof phone !== "string") {
       errors.push("phone is missing");
+    }
+
+    if (phone.length < 3 || phone.length > 200) {
+      errors.push("phone must be between 3 and 200 characters");
     }
 
     if (errors.length) {
@@ -165,8 +156,7 @@ router.post("/addphone", async (req, res) => {
     });
     return res.status(201).json({"status": "success"});
   } catch (err) {
-    console.log(err);
-    return res.status(400).json({"status": "error", "message":err});
+    return res.status(400).json({"status": "error", "message":err.message});
   }
 });
 
@@ -187,7 +177,7 @@ router.get("/profile", async (req, res) => {
 router.post("/login", async (req, res) => {
   try {
     const { username, password } = req.body;
-    if (!(username && password)) {
+    if (!(username && password) || typeof username !== "string" || typeof password !== "string") {
       return res.status(400).json({"status":"error","message":"input username and password"});
     }
     var sql = "SELECT * FROM users WHERE username = ?";
@@ -209,7 +199,7 @@ router.post("/login", async (req, res) => {
       }
     });
   } catch (err) {
-    return res.status(400).json({"status": "error", "message":err});
+    return res.status(400).json({"status": "error", "message":err.message});
   }
 });
 

@@ -3,7 +3,7 @@ services:
   backend:
     build: src/backend/
     volumes:
-      - ./backend/usersdb.sqlite:/service/backend/usersdb.sqlite:rw
+      - ./persist/:/service/persist:rw
   proxy:
     build: src/proxy/
     links:

@@ -278,6 +278,11 @@ async def havoc_hacker(task: HavocCheckerTaskMessage, logger: LoggerAdapter, db:
     status, headers, body = await do_post(task.address, PORT, path, {}, urlencode(payload, quote_via=quote_plus))
     assert_status_code(logger, path, status, headers, body, 400)
 
+@checker.havoc(2)
+async def havoc_healthcheck(task: HavocCheckerTaskMessage, logger: LoggerAdapter, db: ChainDB):
+    path = "/"
+    status, headers, body = await do_get(task.address, PORT, path, {})
+    assert_status_code(logger, path, status, headers, body, 200)
 
 @checker.putnoise(1)
 async def putflag_enc(task: PutflagCheckerTaskMessage, logger: LoggerAdapter, db: ChainDB) -> str:
@@ -357,7 +362,7 @@ async def exploit_simple_smugling(task: ExploitCheckerTaskMessage, logger: Logge
 
     return searcher.search_flag(body)
 
-def smartattack(P: ecc.Coord, q: int):
+def smartattack(P: ecc.Coord):
     return eval(subprocess.check_output(["sage", "smartattack.sage", P.x, P.y]))
 
 @checker.exploit(1)
@@ -384,7 +389,7 @@ async def exploit_smart_attack(task: ExploitCheckerTaskMessage, logger: LoggerAd
                 if "note" in data and "noteIv" in data:
                     note = binascii.unhexlify(base64.b64decode(data["note"]).decode())
                     noteIv = data["noteIv"]
-                    privateKeys = smartattack(curve_g, publicKey, curve.q)
+                    privateKeys = smartattack(publicKey)
                     for pk in privateKeys:
                         key = hashlib.sha512(str(pk)).hexdigest()[:32].encode()
                         iv = base64.b64decode(noteIv.encode())

@@ -1,7 +1,7 @@
 FROM python:3.11
 
 # Install deps
-RUN apt update && apt install build-essential
+RUN apt update && apt install build-essential sagemath
 
 # Create user
 RUN useradd -ms /bin/bash -u 1000 checker

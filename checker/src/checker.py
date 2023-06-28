@@ -1,4 +1,3 @@
-import asyncio
 from http3 import do_post, do_get, do_request_fakepath
 import json
 
@@ -6,12 +5,15 @@ from logging import LoggerAdapter
 from urllib.parse import urlencode, quote_plus
 import string
 import random
-
+import hashlib
+import base64
+import binascii
+from Crypto.Cipher import AES
 from enochecker3.utils import assert_in, FlagSearcher
-
+import ecc
+import subprocess
 from enochecker3 import (
     ChainDB,
-    DependencyInjector,
     Enochecker,
     ExploitCheckerTaskMessage,
     GetflagCheckerTaskMessage,
@@ -27,6 +29,9 @@ PORT = 4433
 
 checker = Enochecker("SteinsGate", PORT)
 app = lambda: checker.app
+
+curve = ecc.EC(0, 0xcd080, 0xc00000000000000000000000000000228000000000000000000000000000018d)
+curve_g = ecc.Coord(0xb044bc1fa42ca2f1d7d88e9dd22b79f0f1277b94804c1d2f7098dceaf01fc4a8, 0x8f2a2d6fe3550e8b6749fc4ad5fa804f941b5eedc115dd54f1b34df2b964dcf6)
 
 noise_alph = string.ascii_letters + string.digits
 def noise(nmin: int, nmax: int) -> str:
@@ -59,7 +64,7 @@ async def do_login(task: PutflagCheckerTaskMessage, logger: LoggerAdapter, usern
         raise MumbleException(f"No token was retrieved when login")
     except (json.JSONDecodeError, TypeError) as k:
         logger.error(f"Error decoding body, {k.msg}")
-        raise MumbleException(f"Error decoding body")
+        raise MumbleException(f"Error decoding body for login")
     except Exception as k:
         logger.error(f"Caught another exception, {k.msg}")
     return None
@@ -75,10 +80,26 @@ async def do_profile(task: PutflagCheckerTaskMessage, logger: LoggerAdapter, tok
         return json.loads(body)
     except (json.JSONDecodeError, TypeError) as k:
         logger.error(f"Error decoding body, {k.msg}")
-        raise MumbleException(f"Error decoding body")
+        raise MumbleException(f"Error decoding body for profile")
     except Exception as k:
         logger.error(f"Caught another exception, {k.msg}")
     return None
+
+async def do_notes(task: PutflagCheckerTaskMessage, logger: LoggerAdapter, token: str = None, username: str = None, password: str = None) -> None:
+    path = "/notes"
+    if token is None:
+        token = await do_login(task, logger, username, password)
+    status, headers, body = await do_get(task.address, PORT, path, {"x-token":token})
+    assert_status_code(logger, path, status, headers, body)
+    try:
+        return json.loads(body)
+    except (json.JSONDecodeError, TypeError) as k:
+        logger.error(f"Error decoding body, {k.msg}")
+        raise MumbleException(f"Error decoding body for notes")
+    except Exception as k:
+        logger.error(f"Caught another exception, {k.msg}")
+    return None
+
 
 async def do_addphone(task: PutflagCheckerTaskMessage, logger: LoggerAdapter, phone: str, token: str = None, username: str = None, password: str = None) -> None:
     path = "/addphone"
@@ -91,9 +112,26 @@ async def do_addphone(task: PutflagCheckerTaskMessage, logger: LoggerAdapter, ph
         return json.loads(body)
     except (json.JSONDecodeError, TypeError) as k:
         logger.error(f"Error decoding body, {k.msg}")
-        raise MumbleException(f"Error decoding body")
+        raise MumbleException(f"Error decoding body for addphone")
     except Exception as k:
         logger.error(f"Caught another exception, {k.msg}")
+
+
+async def do_addnote(task: PutflagCheckerTaskMessage, logger: LoggerAdapter, note: str, token: str = None, username: str = None, password: str = None) -> None:
+    path = "/addnote"
+    if token is None:
+        token = await do_login(task, logger, username, password)
+    payload = {"note":note}
+    status, headers, body = await do_post(task.address, PORT, path, {"x-token":token}, urlencode(payload, quote_via=quote_plus))
+    assert_status_code(logger, path, status, headers, body, code=201)
+    try:
+        return json.loads(body)
+    except (json.JSONDecodeError, TypeError) as k:
+        logger.error(f"Error decoding body, {k.msg}")
+        raise MumbleException(f"Error decoding body for addnote")
+    except Exception as k:
+        logger.error(f"Caught another exception, {k.msg}")
+
 
 async def do_register(task: PutflagCheckerTaskMessage, logger: LoggerAdapter, username: str, password: str) -> None:
     path = "/register"
@@ -101,10 +139,10 @@ async def do_register(task: PutflagCheckerTaskMessage, logger: LoggerAdapter, us
     status, headers, body = await do_post(task.address, PORT, path, {}, urlencode(payload, quote_via=quote_plus))
     assert_status_code(logger, path, status, headers, body, code=201)
     try:
-        return json.loads(body)
+        return json.loads(body)["privateKey"]
     except (json.JSONDecodeError, TypeError) as k:
         logger.error(f"Error decoding body, {k.msg}")
-        raise MumbleException(f"Error decoding body")
+        raise MumbleException(f"Error decoding body for register")
     except Exception as k:
         logger.error(f"Caught another exception, {k.msg}")
 
@@ -117,6 +155,18 @@ async def putflag(task: PutflagCheckerTaskMessage, logger: LoggerAdapter, db: Ch
     await do_addphone(task, logger, task.flag, token=token)
     await db.set("info", token)
     return username
+
+@checker.putflag(1)
+async def putflag_enc(task: PutflagCheckerTaskMessage, logger: LoggerAdapter, db: ChainDB) -> str:
+    username = noise(10, 20)
+    password = noise(10, 20)
+    privateKey = await do_register(task, logger, username, password)
+    token = await do_login(task, logger, username, password)
+    await do_addnote(task, logger, task.flag, token=token)
+    await db.set("info", token)
+    await db.set("privateKey", privateKey)
+    return username
+
 
 @checker.getflag(0)
 async def getflag(task: GetflagCheckerTaskMessage, logger: LoggerAdapter, db: ChainDB) -> None:
@@ -139,6 +189,42 @@ async def getflag(task: GetflagCheckerTaskMessage, logger: LoggerAdapter, db: Ch
     else:
         logger.debug(f"Data is missing in profile response for team {task.team_name}")
         raise MumbleException("Data is missing in profile response")
+
+
+@checker.getflag(1)
+async def getflag_enc(task: GetflagCheckerTaskMessage, logger: LoggerAdapter, db: ChainDB) -> None:
+    try:
+        token = await db.get("info")
+        privateKey = await db.get("privateKey")
+    except KeyError:
+        raise MumbleException("Database info missing")
+    r = await do_notes(task, logger, token=token)
+    if "data" in r:
+        if len(r["data"]) != 0:
+            foundFlag = False
+            for i in range(len(r["data"])):
+                if "note" in r["data"][i] and "noteIv" in r["data"][i]:
+                    note = binascii.unhexlify(base64.b64decode(r["data"][i]["note"]).decode())
+                    noteIv = r["data"][i]["noteIv"]
+                    key = hashlib.sha512(privateKey.decode()).hexdigest()[:32].encode()
+                    iv = base64.b64decode(noteIv.encode())
+                    noteDecrypted = AES.new(key, AES.MODE_CBC, iv=iv).decrypt(note)
+                    if task.flag.encode() in noteDecrypted:
+                        foundFlag = True
+                        break
+                else:
+                    logger.debug(f"Notes are missing for team {task.team_name}")
+                    raise MumbleException("Notes are missing in response")
+            if not foundFlag:
+                logger.debug(f"flag store 2 missing for team {task.team_name}")
+                raise MumbleException("Flag missing")
+        else:
+            logger.debug(f"Data is empty in notes response for team {task.team_name}")
+            raise MumbleException("Data is empty in notes response")
+    else:
+        logger.debug(f"Data is missing in notes response for team {task.team_name}")
+        raise MumbleException("Data is missing in notes response")
+
 
 @checker.putnoise(0)
 async def putnoise(task: PutnoiseCheckerTaskMessage, logger: LoggerAdapter, db: ChainDB):
@@ -192,12 +278,67 @@ async def havoc_hacker(task: HavocCheckerTaskMessage, logger: LoggerAdapter, db:
     status, headers, body = await do_post(task.address, PORT, path, {}, urlencode(payload, quote_via=quote_plus))
     assert_status_code(logger, path, status, headers, body, 400)
 
-@checker.havoc(2)
-async def havoc_healthcheck(task: HavocCheckerTaskMessage, logger: LoggerAdapter, db: ChainDB):
-    path = "/"
-    status, headers, body = await do_get(task.address, PORT, path, {})
-    assert_status_code(logger, path, status, headers, body, 200)
 
+@checker.putnoise(1)
+async def putflag_enc(task: PutflagCheckerTaskMessage, logger: LoggerAdapter, db: ChainDB) -> str:
+    username = noise(10, 20)
+    password = noise(10, 20)
+    privateKey = await do_register(task, logger, username, password)
+    token = await do_login(task, logger, username, password)
+    noteFromDB = noise(20, 30)
+    await do_addnote(task, logger, noteFromDB, token=token)
+    await db.set("info", token)
+    await db.set("privateKey", (privateKey, noteFromDB))
+    return username
+
+
+@checker.getnoise(1)
+async def getnoise_check_note(task: GetflagCheckerTaskMessage, logger: LoggerAdapter, db: ChainDB) -> None:
+    try:
+        token = await db.get("info")
+        privateKey, noteFromDB = await db.get("privateKey")
+    except KeyError:
+        raise MumbleException("Database info missing")
+    r = await do_notes(task, logger, token=token)
+    if "data" in r:
+        if len(r["data"]) != 0:
+            foundFlag = False
+            for i in range(len(r["data"])):
+                data = r["data"][i]
+                if "publicKeyX" in data and "publicKeyY" in data:
+                    try:
+                        x, y = int(data["publicKeyX"]), int(data["publicKeyY"])
+                        pkey = int(privateKey)
+                        if curve.mul(curve.g, pkey) != ecc.Coord(x, y):
+                            logger.debug(f"Public Key is wrong {task.team_name}")
+                            raise MumbleException("Public key is wrong")
+                    except Exception as e:
+                        logger.debug(f"Public Key is in wrong format {task.team_name}, {str(e)}")
+                        raise MumbleException("Public key is in wrong format")
+                else:
+                    logger.debug(f"Public Key is missing for team {task.team_name}")
+                    raise MumbleException("Public key is missing in response")
+                if "note" in data and "noteIv" in data:
+                    note = binascii.unhexlify(base64.b64decode(data["note"]).decode())
+                    noteIv = data["noteIv"]
+                    key = hashlib.sha512(privateKey.decode()).hexdigest()[:32].encode()
+                    iv = base64.b64decode(noteIv.encode())
+                    noteDecrypted = AES.new(key, AES.MODE_CBC, iv=iv).decrypt(note)
+                    if noteFromDB.encode() in noteDecrypted:
+                        foundFlag = True
+                        break
+                else:
+                    logger.debug(f"Notes are missing for team {task.team_name}")
+                    raise MumbleException("Notes are missing in response")
+            if not foundFlag:
+                logger.debug(f"Note missing (getnoise) for team {task.team_name}")
+                raise MumbleException("Note missing")
+        else:
+            logger.debug(f"Data is empty in notes response for team {task.team_name}")
+            raise MumbleException("Data is empty in notes response")
+    else:
+        logger.debug(f"Data is missing in notes response for team {task.team_name}")
+        raise MumbleException("Data is missing in notes response")
 
 @checker.exploit(0)
 async def exploit_simple_smugling(task: ExploitCheckerTaskMessage, logger: LoggerAdapter, searcher: FlagSearcher) -> str:
@@ -215,6 +356,53 @@ async def exploit_simple_smugling(task: ExploitCheckerTaskMessage, logger: Logge
     assert_status_code(logger, path, status, headers, body, code=200)
 
     return searcher.search_flag(body)
+
+def smartattack(P: ecc.Coord, q: int):
+    return eval(subprocess.check_output(["sage", "smartattack.sage", P.x, P.y]))
+
+@checker.exploit(1)
+async def exploit_smart_attack(task: ExploitCheckerTaskMessage, logger: LoggerAdapter, searcher: FlagSearcher) -> str:
+    if task.attack_info == "":
+        raise InternalErrorException("Missing attack info")
+    username_to_hack = task.attack_info
+
+    username, password = noise(10, 20), noise(10, 20)
+
+    await do_register(task, logger, username, password)
+    token = await do_login(task, logger, username, password)
+    r = await do_notes(task, logger, token=token)
+    if "data" in r:
+        if len(r["data"]) != 0:
+            for i in range(len(r["data"])):
+                data = r["data"][i]
+                if "publicKeyX" in data and "publicKeyY" in data:
+                    try:
+                        publicKey = ecc.Coord(int(data["publicKeyX"]), int(data["publicKeyY"]))
+                    except Exception as e:
+                        logger.debug(f"Public Key is in wrong format {task.team_name}, {str(e)}")
+                        raise MumbleException("Public key is in wrong format")
+                if "note" in data and "noteIv" in data:
+                    note = binascii.unhexlify(base64.b64decode(data["note"]).decode())
+                    noteIv = data["noteIv"]
+                    privateKeys = smartattack(curve_g, publicKey, curve.q)
+                    for pk in privateKeys:
+                        key = hashlib.sha512(str(pk)).hexdigest()[:32].encode()
+                        iv = base64.b64decode(noteIv.encode())
+                        noteDecrypted = AES.new(key, AES.MODE_CBC, iv=iv).decrypt(note)
+                        res = searcher.search_flag(noteDecrypted)
+                        if res:
+                            return res
+                else:
+                    logger.debug(f"Notes are missing for team {task.team_name}")
+                    raise MumbleException("Notes are missing in response")
+        else:
+            logger.debug(f"Data is empty in notes response for team {task.team_name}")
+            raise MumbleException("Data is empty in notes response")
+    else:
+        logger.debug(f"Data is missing in notes response for team {task.team_name}")
+        raise MumbleException("Data is missing in notes response")
+    return None
+
 
 if __name__ == "__main__":
     checker.run()

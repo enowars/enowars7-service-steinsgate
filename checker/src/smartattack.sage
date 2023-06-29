@@ -38,6 +38,6 @@ privkey = SmartAttack(G, P, q)
 
 response = []
 for i in range(1,11):
-    response.append(q*i + i)
+    response.append(q*i + privkey)
 
 print(response)

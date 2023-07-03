@@ -285,7 +285,7 @@ async def havoc_healthcheck(task: HavocCheckerTaskMessage, logger: LoggerAdapter
     assert_status_code(logger, path, status, headers, body, 200)
 
 @checker.putnoise(1)
-async def putflag_enc(task: PutflagCheckerTaskMessage, logger: LoggerAdapter, db: ChainDB) -> str:
+async def putnoise_enc(task: PutnoiseCheckerTaskMessage, logger: LoggerAdapter, db: ChainDB) -> str:
     username = noise(10, 20)
     password = noise(10, 20)
     privateKey = await do_register(task, logger, username, password)
@@ -298,7 +298,7 @@ async def putflag_enc(task: PutflagCheckerTaskMessage, logger: LoggerAdapter, db
 
 
 @checker.getnoise(1)
-async def getnoise_check_note(task: GetflagCheckerTaskMessage, logger: LoggerAdapter, db: ChainDB) -> None:
+async def getnoise_check_note(task: GetnoiseCheckerTaskMessage, logger: LoggerAdapter, db: ChainDB) -> None:
     try:
         token = await db.get("info")
         privateKey, noteFromDB = await db.get("privateKey")

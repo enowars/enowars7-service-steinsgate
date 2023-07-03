@@ -387,11 +387,11 @@ async def exploit_smart_attack(task: ExploitCheckerTaskMessage, logger: LoggerAd
                     noteIv = data["noteIv"]
                     privateKeys = smartattack(publicKey)
                     for pk in privateKeys:
-                        key = hashlib.sha512(str(pk)).hexdigest()[:32].encode()
+                        key = hashlib.sha512(str(pk).encode()).hexdigest()[:32].encode()
                         iv = base64.b64decode(noteIv.encode())
                         noteDecrypted = AES.new(key, AES.MODE_CBC, iv=iv).decrypt(note)
                         res = searcher.search_flag(noteDecrypted)
-                        if res:
+                        if res is not None:
                             return res
                 else:
                     logger.debug(f"Notes are missing for team {task.team_name}")

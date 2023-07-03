@@ -49,8 +49,8 @@ def assert_status_code(logger: LoggerAdapter, path: str, status: str, headers, b
             return
         logger.error(f"Bad status code during request at {path}: ({status_code} != {code})\n{body}")
         raise MumbleException(f"Received {status_code} code at {path} failed")
-    except:
-        raise MumbleException(f"Error parsing status code")
+    except Exception as e:
+        raise MumbleException(f"Error parsing status code {e}")
 
 async def do_login(task: PutflagCheckerTaskMessage, logger: LoggerAdapter, username: str, password: str) -> None:
     path = "/login"

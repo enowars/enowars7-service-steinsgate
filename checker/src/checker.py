@@ -163,8 +163,8 @@ async def putflag_enc(task: PutflagCheckerTaskMessage, logger: LoggerAdapter, db
     privateKey = await do_register(task, logger, username, password)
     token = await do_login(task, logger, username, password)
     await do_addnote(task, logger, task.flag, token=token)
-    await db.set("info", token)
-    await db.set("privateKey", privateKey)
+    await db.set("infopflag", token)
+    await db.set("privateKeypflag", privateKey)
     return username
 
 
@@ -194,8 +194,8 @@ async def getflag(task: GetflagCheckerTaskMessage, logger: LoggerAdapter, db: Ch
 @checker.getflag(1)
 async def getflag_enc(task: GetflagCheckerTaskMessage, logger: LoggerAdapter, db: ChainDB) -> None:
     try:
-        token = await db.get("info")
-        privateKey = await db.get("privateKey")
+        token = await db.get("infopflag")
+        privateKey = await db.get("privateKeypflag")
     except KeyError:
         raise MumbleException("Database info missing")
     r = await do_notes(task, logger, token=token)

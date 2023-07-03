@@ -37,7 +37,8 @@ P = curve((int(sys.argv[1]), int(sys.argv[2])))
 privkey = SmartAttack(G, P, q)
 
 response = []
-for i in range(1,11):
+response.append(privkey)
+for i in range(1,9):
     response.append(q*i + privkey)
 
 print(response)

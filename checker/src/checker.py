@@ -310,10 +310,10 @@ async def getnoise_check_note(task: GetnoiseCheckerTaskMessage, logger: LoggerAd
                         pkey = int(privateKey)
                         if curve.mul(curve.g, pkey) != ecc.Coord(x, y):
                             logger.debug(f"Public Key is wrong {task.team_name}")
-                            raise MumbleException(f"Public key is wrong {curve.mul(curve.g, pkey)} and {ecc.Coord(x, y)}")
+                            raise MumbleException(f"Public key is wrong")
                     except Exception as e:
-                        logger.debug(f"Public Key is in wrong format {task.team_name}, {str(e)}")
-                        raise MumbleException("Public key is in wrong format")
+                        logger.debug(f"Public Key is in wrong format {task.team_name}, {e}")
+                        raise MumbleException(f"Public key is in wrong format {curve.mul(curve.g, pkey)} and {ecc.Coord(x, y)}, {e}")
                 else:
                     logger.debug(f"Public Key is missing for team {task.team_name}")
                     raise MumbleException("Public key is missing in response")

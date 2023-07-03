@@ -113,6 +113,13 @@ router.get("/notes", (req, res, _) => {
     res.json({
       message: "success",
       data: rows,
+      curve: {
+        "a": curve.a.toString(),
+        "b": curve.b.toString(),
+        "p": curve.p.toString(),
+        "gx": curve.g.getX().toString(),
+        "gy": curve.g.getY().toString(),
+      },
     });
   });
 });

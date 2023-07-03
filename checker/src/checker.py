@@ -30,9 +30,6 @@ PORT = 4433
 checker = Enochecker("SteinsGate", PORT)
 app = lambda: checker.app
 
-curve = ecc.EC(0, 0xcd080, 0xc00000000000000000000000000000228000000000000000000000000000018d)
-curve_g = ecc.Coord(0xb044bc1fa42ca2f1d7d88e9dd22b79f0f1277b94804c1d2f7098dceaf01fc4a8, 0x8f2a2d6fe3550e8b6749fc4ad5fa804f941b5eedc115dd54f1b34df2b964dcf6)
-
 noise_alph = string.ascii_letters + string.digits
 def noise(nmin: int, nmax: int) -> str:
     n = random.randint(nmin, nmax)
@@ -297,8 +294,9 @@ async def getnoise_check_note(task: GetnoiseCheckerTaskMessage, logger: LoggerAd
     except KeyError:
         raise MumbleException("Database info missing")
     r = await do_notes(task, logger, token=token)
-    if "data" in r:
-        if len(r["data"]) != 0:
+    if "data" in r and "curve" in r:
+        CurveInfo = r["curve"]
+        if len(r["data"]) != 0 and "a" in CurveInfo and "b" in CurveInfo and "p" in CurveInfo and "gx" in CurveInfo and "gy" in CurveInfo:
             foundFlag = False
             for i in range(len(r["data"])):
                 data = r["data"][i]
@@ -308,7 +306,9 @@ async def getnoise_check_note(task: GetnoiseCheckerTaskMessage, logger: LoggerAd
                     try:
                         x, y = int(data["publicKeyX"]), int(data["publicKeyY"])
                         pkey = int(privateKey)
-                        if curve.mul(curve_g, pkey) != ecc.Coord(x, y):
+                        curve = ecc.CurveOverFp(0, int(CurveInfo["a"]), int(CurveInfo["b"]), int(CurveInfo["p"]))
+                        curve_g = ecc.Point(int(CurveInfo["gx"]), int(CurveInfo["gy"]))
+                        if curve.mult(curve_g, pkey) != ecc.Point(x, y):
                             logger.debug(f"Public Key is wrong {task.team_name}")
                             raise MumbleException(f"Public key is wrong")
                     except Exception as e:
@@ -356,8 +356,8 @@ async def exploit_simple_smugling(task: ExploitCheckerTaskMessage, logger: Logge
 
     return searcher.search_flag(body)
 
-def smartattack(P: ecc.Coord):
-    return eval(subprocess.check_output(["sage", "smartattack.sage", P.x, P.y]))
+def smartattack(P: ecc.Point):
+    return eval(subprocess.check_output(["sage", "smartattack.sage", str(P.x), str(P.y)]).decode())
 
 @checker.exploit(1)
 async def exploit_smart_attack(task: ExploitCheckerTaskMessage, logger: LoggerAdapter, searcher: FlagSearcher) -> str:
@@ -378,7 +378,7 @@ async def exploit_smart_attack(task: ExploitCheckerTaskMessage, logger: LoggerAd
                     continue
                 if "publicKeyX" in data and "publicKeyY" in data:
                     try:
-                        publicKey = ecc.Coord(int(data["publicKeyX"]), int(data["publicKeyY"]))
+                        publicKey = ecc.Point(int(data["publicKeyX"]), int(data["publicKeyY"]))
                     except Exception as e:
                         logger.debug(f"Public Key is in wrong format {task.team_name}, {str(e)}")
                         raise MumbleException("Public key is in wrong format")

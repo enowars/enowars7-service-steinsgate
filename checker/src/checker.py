@@ -283,7 +283,7 @@ async def putnoise_enc(task: PutnoiseCheckerTaskMessage, logger: LoggerAdapter, 
     token = await do_login(task, logger, username, password)
     noteFromDB = noise(20, 30)
     await do_addnote(task, logger, noteFromDB, token=token)
-    await db.set("infopnoise", token)
+    await db.set("infopnoise", (token, username))
     await db.set("privateKeypnoise", (privateKey, noteFromDB))
     return username
 
@@ -291,7 +291,7 @@ async def putnoise_enc(task: PutnoiseCheckerTaskMessage, logger: LoggerAdapter, 
 @checker.getnoise(1)
 async def getnoise_check_note(task: GetnoiseCheckerTaskMessage, logger: LoggerAdapter, db: ChainDB) -> None:
     try:
-        token = await db.get("infopnoise")
+        token, uname = await db.get("infopnoise")
         privateKey, noteFromDB = await db.get("privateKeypnoise")
     except KeyError:
         raise MumbleException("Database info missing")
@@ -301,6 +301,8 @@ async def getnoise_check_note(task: GetnoiseCheckerTaskMessage, logger: LoggerAd
             foundFlag = False
             for i in range(len(r["data"])):
                 data = r["data"][i]
+                if data["username"] != uname:
+                    continue
                 if "publicKeyX" in data and "publicKeyY" in data:
                     try:
                         x, y = int(data["publicKeyX"]), int(data["publicKeyY"])
@@ -371,6 +373,8 @@ async def exploit_smart_attack(task: ExploitCheckerTaskMessage, logger: LoggerAd
         if len(r["data"]) != 0:
             for i in range(len(r["data"])):
                 data = r["data"][i]
+                if data["username"] != username_to_hack:
+                    continue
                 if "publicKeyX" in data and "publicKeyY" in data:
                     try:
                         publicKey = ecc.Coord(int(data["publicKeyX"]), int(data["publicKeyY"]))

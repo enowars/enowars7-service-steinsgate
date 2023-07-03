@@ -204,18 +204,15 @@ async def getflag_enc(task: GetflagCheckerTaskMessage, logger: LoggerAdapter, db
             foundFlag = False
             for i in range(len(r["data"])):
                 if "note" in r["data"][i] and "noteIv" in r["data"][i]:
-                    try:
-                        note = binascii.unhexlify(base64.b64decode(r["data"][i]["note"]).decode())
-                        noteIv = r["data"][i]["noteIv"]
-                        key = hashlib.sha512(privateKey.encode()).hexdigest()[:32].encode()
-                        iv = base64.b64decode(noteIv.encode())
-                        noteDecrypted = AES.new(key, AES.MODE_CBC, iv=iv).decrypt(note)
-                        logger.debug(f"Decrypted: {noteDecrypted}")
-                        if task.flag.encode() in noteDecrypted:
-                            foundFlag = True
-                            break
-                    except Exception as e:
-                        raise MumbleException(f"Exception got on getflag {e}")
+                    note = binascii.unhexlify(base64.b64decode(r["data"][i]["note"]).decode())
+                    noteIv = r["data"][i]["noteIv"]
+                    key = hashlib.sha512(privateKey.encode()).hexdigest()[:32].encode()
+                    iv = base64.b64decode(noteIv.encode())
+                    noteDecrypted = AES.new(key, AES.MODE_CBC, iv=iv).decrypt(note)
+                    logger.debug(f"Decrypted: {noteDecrypted}")
+                    if task.flag.encode() in noteDecrypted:
+                        foundFlag = True
+                        break
                 else:
                     logger.debug(f"Notes are missing for team {task.team_name}")
                     raise MumbleException("Notes are missing in response")
@@ -323,7 +320,7 @@ async def getnoise_check_note(task: GetnoiseCheckerTaskMessage, logger: LoggerAd
                 if "note" in data and "noteIv" in data:
                     note = binascii.unhexlify(base64.b64decode(data["note"]).decode())
                     noteIv = data["noteIv"]
-                    key = hashlib.sha512(privateKey.decode()).hexdigest()[:32].encode()
+                    key = hashlib.sha512(privateKey.encode()).hexdigest()[:32].encode()
                     iv = base64.b64decode(noteIv.encode())
                     noteDecrypted = AES.new(key, AES.MODE_CBC, iv=iv).decrypt(note)
                     if noteFromDB.encode() in noteDecrypted:

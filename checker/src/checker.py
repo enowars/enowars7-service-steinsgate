@@ -259,6 +259,10 @@ async def getnoise(task: GetnoiseCheckerTaskMessage, logger: LoggerAdapter, db: 
         raise MumbleException("Data is missing in profile response")
 
 @checker.havoc(0)
+async def havoc_safado(task: HavocCheckerTaskMessage, logger: LoggerAdapter, db: ChainDB):
+    pass
+
+@checker.havoc(1)
 async def havoc_hacker(task: HavocCheckerTaskMessage, logger: LoggerAdapter, db: ChainDB):
     path = "/login"
     username = noise(10, 20)
@@ -266,6 +270,10 @@ async def havoc_hacker(task: HavocCheckerTaskMessage, logger: LoggerAdapter, db:
     payload = {"username":username,"password":password}
     status, headers, body = await do_post(task.address, PORT, path, {}, urlencode(payload, quote_via=quote_plus))
     assert_status_code(logger, path, status, headers, body, 400)
+
+@checker.havoc(2)
+async def havoc_healthcheck(task: HavocCheckerTaskMessage, logger: LoggerAdapter, db: ChainDB):
+    pass
 
 @checker.putnoise(1)
 async def putnoise_enc(task: PutnoiseCheckerTaskMessage, logger: LoggerAdapter, db: ChainDB) -> str:

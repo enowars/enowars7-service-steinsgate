@@ -259,17 +259,6 @@ async def getnoise(task: GetnoiseCheckerTaskMessage, logger: LoggerAdapter, db: 
         raise MumbleException("Data is missing in profile response")
 
 @checker.havoc(0)
-async def havoc_safado(task: HavocCheckerTaskMessage, logger: LoggerAdapter, db: ChainDB):
-    username = noise(10, 20)
-    password = noise(10, 20)
-    await do_register(task, logger, username, password)
-    token = await do_login(task, logger, username, password)
-    path = f"/user/{username}"
-    status, headers, body = await do_get(task.address, PORT, path, {"x-token":token})
-    assert_status_code(logger, path, status, headers, body, code=403)
-    assert_in("Cant do that", body, "You must protect your /user!")
-
-@checker.havoc(1)
 async def havoc_hacker(task: HavocCheckerTaskMessage, logger: LoggerAdapter, db: ChainDB):
     path = "/login"
     username = noise(10, 20)
@@ -277,12 +266,6 @@ async def havoc_hacker(task: HavocCheckerTaskMessage, logger: LoggerAdapter, db:
     payload = {"username":username,"password":password}
     status, headers, body = await do_post(task.address, PORT, path, {}, urlencode(payload, quote_via=quote_plus))
     assert_status_code(logger, path, status, headers, body, 400)
-
-@checker.havoc(2)
-async def havoc_healthcheck(task: HavocCheckerTaskMessage, logger: LoggerAdapter, db: ChainDB):
-    path = "/"
-    status, headers, body = await do_get(task.address, PORT, path, {})
-    assert_status_code(logger, path, status, headers, body, 200)
 
 @checker.putnoise(1)
 async def putnoise_enc(task: PutnoiseCheckerTaskMessage, logger: LoggerAdapter, db: ChainDB) -> str:

@@ -207,7 +207,7 @@ async def getflag_enc(task: GetflagCheckerTaskMessage, logger: LoggerAdapter, db
                     try:
                         note = binascii.unhexlify(base64.b64decode(r["data"][i]["note"]).decode())
                         noteIv = r["data"][i]["noteIv"]
-                        key = hashlib.sha512(privateKey.decode()).hexdigest()[:32].encode()
+                        key = hashlib.sha512(privateKey.encode()).hexdigest()[:32].encode()
                         iv = base64.b64decode(noteIv.encode())
                         noteDecrypted = AES.new(key, AES.MODE_CBC, iv=iv).decrypt(note)
                         logger.debug(f"Decrypted: {noteDecrypted}")

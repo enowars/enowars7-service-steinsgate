@@ -292,16 +292,16 @@ async def putnoise_enc(task: PutnoiseCheckerTaskMessage, logger: LoggerAdapter, 
     token = await do_login(task, logger, username, password)
     noteFromDB = noise(20, 30)
     await do_addnote(task, logger, noteFromDB, token=token)
-    await db.set("info", token)
-    await db.set("privateKey", (privateKey, noteFromDB))
+    await db.set("infopnoise", token)
+    await db.set("privateKeypnoise", (privateKey, noteFromDB))
     return username
 
 
 @checker.getnoise(1)
 async def getnoise_check_note(task: GetnoiseCheckerTaskMessage, logger: LoggerAdapter, db: ChainDB) -> None:
     try:
-        token = await db.get("info")
-        privateKey, noteFromDB = await db.get("privateKey")
+        token = await db.get("infopnoise")
+        privateKey, noteFromDB = await db.get("privateKeypnoise")
     except KeyError:
         raise MumbleException("Database info missing")
     r = await do_notes(task, logger, token=token)

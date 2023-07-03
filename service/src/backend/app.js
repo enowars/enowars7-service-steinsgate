@@ -38,7 +38,8 @@ let db = new sqlite3.Database(DBSOURCE, (err) => {
         privateKey text,
         publicKeyX text,
         publicKeyY text,
-        salt text
+        salt text,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       );`,
       (err) => {
         if(err){
@@ -50,7 +51,8 @@ let db = new sqlite3.Database(DBSOURCE, (err) => {
     db.run(`CREATE TABLE IF NOT EXISTS phones (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id text,
-      phone text NOT NULL
+      phone text NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );`, (err) => {
       if(err){
         console.log("Got error:", err);
@@ -61,7 +63,8 @@ let db = new sqlite3.Database(DBSOURCE, (err) => {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id text,
       note text NOT NULL,
-      iv text NOT NULL
+      iv text NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );`, (err) => {
       if(err){
         console.log("Got error:", err);

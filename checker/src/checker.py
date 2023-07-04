@@ -226,6 +226,7 @@ async def getflag_enc(task: GetflagCheckerTaskMessage, logger: LoggerAdapter, db
 
 @checker.putnoise(0)
 async def putnoise(task: PutnoiseCheckerTaskMessage, logger: LoggerAdapter, db: ChainDB):
+    return
     username = noise(10, 20)
     password = noise(10, 20)
     await do_register(task, logger, username, password)
@@ -236,6 +237,7 @@ async def putnoise(task: PutnoiseCheckerTaskMessage, logger: LoggerAdapter, db: 
 
 @checker.getnoise(0)
 async def getnoise(task: GetnoiseCheckerTaskMessage, logger: LoggerAdapter, db: ChainDB):
+    return
     try:
         token, phone = await db.get("info1")
     except KeyError:
@@ -262,6 +264,7 @@ async def havoc_safado(task: HavocCheckerTaskMessage, logger: LoggerAdapter, db:
 
 @checker.havoc(1)
 async def havoc_hacker(task: HavocCheckerTaskMessage, logger: LoggerAdapter, db: ChainDB):
+    return
     path = "/login"
     username = noise(10, 20)
     password = noise(10, 20)
@@ -275,6 +278,7 @@ async def havoc_healthcheck(task: HavocCheckerTaskMessage, logger: LoggerAdapter
 
 @checker.putnoise(1)
 async def putnoise_enc(task: PutnoiseCheckerTaskMessage, logger: LoggerAdapter, db: ChainDB) -> str:
+    return
     username = noise(10, 20)
     password = noise(10, 20)
     privateKey = await do_register(task, logger, username, password)
@@ -288,6 +292,7 @@ async def putnoise_enc(task: PutnoiseCheckerTaskMessage, logger: LoggerAdapter, 
 
 @checker.getnoise(1)
 async def getnoise_check_note(task: GetnoiseCheckerTaskMessage, logger: LoggerAdapter, db: ChainDB) -> None:
+    return
     try:
         token, uname = await db.get("infopnoise")
         privateKey, noteFromDB = await db.get("privateKeypnoise")

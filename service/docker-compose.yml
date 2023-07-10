@@ -10,3 +10,7 @@ services:
       - "backend:backend"
     ports:
       - "4433:4433/udp"
+  interface:
+    build: src/interface
+    ports:
+      - "4420:4420"

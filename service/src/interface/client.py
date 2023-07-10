@@ -11,8 +11,7 @@ from typing import BinaryIO, Callable, Deque, Dict, List, Optional, Union, cast
 from urllib.parse import urlparse
 
 import aioquic
-import wsproto
-import wsproto.events
+
 from aioquic.asyncio.client import connect
 from aioquic.asyncio.protocol import QuicConnectionProtocol
 from aioquic.h3.connection import H3_ALPN, ErrorCode, H3Connection

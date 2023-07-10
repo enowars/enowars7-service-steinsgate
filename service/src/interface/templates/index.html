@@ -1,0 +1,20 @@
+<html>
+<head>
+<title>HTTP3 CLIENT</title>
+</head>
+<body style="background-image:url('{{url_for('static', filename='timemachine.jpeg')}}');background-repeat:no-repeat;background-size:cover;">
+<h1 align="center">HERE YOU CAN TIME TRAVEL TO 2030 AFTER HTTP3 GOT WIDELY ADOPTED</h1>
+<form style="width:100%;display:flex;justify-content:center;" action="/" method="POST">
+<table>
+<tr><th>URL:</th><th><input type="text" name="url" id="url" value="https://proxy:4433/" /></th></tr>
+<tr><th>METHOD:</th><th><input type="text" name="method" id="method" value="GET" /></th></tr>
+<tr><th>HEADER 1:</th><th><input type="text" name="header1" id="header2" /></th></tr>
+<tr><th>HEADER 2:</th><th><input type="text" name="header2" id="header2" /></th></tr>
+<tr><th>PAYLOAD (BODY):</th><th><textarea id="payload" name="payload" rows="4" cols="50"></textarea></th></tr>
+<tr><th>RESPONSE (ONLY BODY):</th></tr>
+<tr><td colspan="2">{{response}}</td></tr>
+<tr><td colspan="2"><input type="submit" value="SEND"></td></tr>
+</table>
+</form>
+</body>
+</html>

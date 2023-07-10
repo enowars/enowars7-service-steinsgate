@@ -18,6 +18,9 @@ jobs:
       ENOCHECKER_TEST_CHECKER_PORT: 8000
 
     steps:
+    - name: Chown user
+      run: |
+          sudo chown -R $USER:$USER $GITHUB_WORKSPACE
     - uses: actions/checkout@v2
       with:
         submodules: recursive

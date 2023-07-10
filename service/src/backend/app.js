@@ -102,10 +102,14 @@ router.get("/user/:username", (req, res, _) => {
   });
 });
 
-router.use("/notes", auth);
-router.get("/notes", (req, res, _) => {
-  var sql = "SELECT u.username, u.publicKeyX, u.publicKeyY, n.note as note, n.iv as noteIv FROM notes n LEFT JOIN users u ON n.user_id=u.id";
-  db.all(sql, (err, rows) => {
+router.use("/notes/:username", auth);
+router.get("/notes/:username", (req, res, _) => {
+  if(typeof req.params.username !== "string"){
+    res.status(400).json({ error: "username must be a string" });
+    return;
+  }
+  var sql = "SELECT u.username, u.publicKeyX, u.publicKeyY, n.note as note, n.iv as noteIv FROM notes n LEFT JOIN users u ON n.user_id=u.id WHERE u.username=?";
+  db.all(sql, req.params.username, (err, rows) => {
     if (err) {
       res.status(400).json({ error: err.message });
       return;

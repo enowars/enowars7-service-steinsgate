@@ -64,6 +64,7 @@ class HttpRequestHandler:
             )
 
     async def run(self) -> None:
+        self.stTime = time.perf_counter()
         raw_path = self.scope["raw_path"].decode().strip()
         for denyRule in proxy_config["denyRules"]:
             if denyRule["path"].match(raw_path):
@@ -81,7 +82,7 @@ class HttpRequestHandler:
                     if "body" in receivedMsg:
                         receivedBody += receivedMsg["body"]
         except Exception as e:
-            print("Exception (receiving body):", e)
+            self.protocol._quic._logger.error(f"Exception (receiving body): {e}")
             await self.ans(b"400", b"Bad request.....", {}, b"")
             return
         try:
@@ -100,7 +101,7 @@ class HttpRequestHandler:
                 sent = sent + sock.send(request[sent:])
             response = b""
         except Exception as e:
-            print("Exception(send request):", e)
+            self.protocol._quic._logger.error(f"Exception(send request): {e}")
             await self.ans(b"503", b"Service unavailable", {}, b"")
             return
         try:
@@ -112,7 +113,7 @@ class HttpRequestHandler:
                     break
                 response = response + chunk
         except socket.timeout as e:
-            print("Exception(receive response):", e)
+            self.protocol._quic._logger.error(f"Exception(receive response): {e}")
             await self.ans(b"503", b"Service unavailable", {}, b"")
             return
         try:
@@ -126,7 +127,7 @@ class HttpRequestHandler:
                 responseHeaders.append((k.lower(), v))
             await self.ans(code, msgCode, responseHeaders, body)
         except Exception as e:
-            print("Exception(send response):", e, response)
+            self.protocol._quic._logger.error(f"Exception(send response): {e} {response}")
             await self.ans(b"503", b"Service unavailable", {}, b"")
             return
         
@@ -134,6 +135,8 @@ class HttpRequestHandler:
     async def ans(self, code, msgCode, responseHeaders, body):
         await self.send({"type": "http.response.start", "status": code + b" " + msgCode, "headers": responseHeaders})
         await self.send({"type": "http.response.body", "body": body})
+        self.fnTime = time.perf_counter()
+        self.protocol._quic._logger.info(f"Request took {str((self.fnTime - self.stTime)*1000)} ms")
 
     async def receive(self) -> Dict:
         return await self.queue.get()
@@ -303,7 +306,7 @@ if __name__ == "__main__":
 
     logging.basicConfig(
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
-        level=logging.DEBUG,
+        level=logging.INFO,
     )
 
     parseConfig("./proxy.conf")

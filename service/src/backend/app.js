@@ -1,4 +1,5 @@
 const express = require("express");
+var morgan = require('morgan');
 const app = express();
 const router = express.Router()
 var sqlite3 = require("sqlite3").verbose();
@@ -7,7 +8,6 @@ var bcrypt = require("bcryptjs");
 const DBSOURCE = "/service/persist/usersdb.sqlite";
 const auth = require("./middleware");
 const crypto = require("crypto");
-var morgan = require('morgan')
 
 const elliptic = require('elliptic');
 const BN = require('bn.js');
@@ -76,8 +76,8 @@ let db = new sqlite3.Database(DBSOURCE, (err) => {
 
 module.exports = db;
 
+app.use(morgan(':method :url :status :res[content-length] - :response-time ms'));
 app.use(express.urlencoded({extended: true}));
-app.use(morgan('combined'));
 
 app.use('/', router)
 

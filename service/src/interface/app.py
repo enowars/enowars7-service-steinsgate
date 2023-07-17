@@ -1,5 +1,8 @@
 from flask import Flask, render_template, request
 import subprocess
+import json
+import base64
+
 app = Flask(__name__)
 
 @app.route('/', methods = ['POST', 'GET'])
@@ -24,10 +27,15 @@ def home():
         args.append("-d")
         args.append(payload)
       args = ["python3", "client.py", "-k", url] + args
-      print("COMMAND:", " ".join(args))
+      print("Command: ", " ".join(args))
       resp = subprocess.check_output(args)
-      return render_template('index.html', response=resp)
-   return render_template('index.html')
+      print("Response: ", resp)
+      if resp != b"" and resp != b"WORKING\n":
+        resp_cooked = json.dumps(json.loads(resp.decode()), indent=2)
+      else:
+        resp_cooked = resp.decode()
+      return render_template('index.html', method=method, url=url, header1=header1, header2=header2, payload=payload, response=resp_cooked, responseB64=base64.b64encode(resp).decode())
+   return render_template('index.html', method="GET", url="https://proxy:4433/", header1="", header2="", payload="", response="", responseB64=base64.b64encode(b"").decode())
 
 if __name__ == '__main__':
    app.run(host="0.0.0.0", port=4420)

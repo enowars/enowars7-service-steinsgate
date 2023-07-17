@@ -1,20 +1,98 @@
 <html>
 <head>
-<title>HTTP3 CLIENT</title>
+    <link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/default.min.css">
+    <title>HTTP3 CLIENT</title>
 </head>
 <body style="background-image:url('{{url_for('static', filename='timemachine.jpeg')}}');background-repeat:no-repeat;background-size:cover;">
-<h1 align="center">HERE YOU CAN TIME TRAVEL TO 2030 AFTER HTTP3 GOT WIDELY ADOPTED</h1>
-<form style="width:100%;display:flex;justify-content:center;" action="/" method="POST">
-<table>
-<tr><th>URL:</th><th><input type="text" name="url" id="url" value="https://proxy:4433/" /></th></tr>
-<tr><th>METHOD:</th><th><input type="text" name="method" id="method" value="GET" /></th></tr>
-<tr><th>HEADER 1:</th><th><input type="text" name="header1" id="header2" /></th></tr>
-<tr><th>HEADER 2:</th><th><input type="text" name="header2" id="header2" /></th></tr>
-<tr><th>PAYLOAD (BODY):</th><th><textarea id="payload" name="payload" rows="4" cols="50"></textarea></th></tr>
-<tr><th>RESPONSE (ONLY BODY):</th></tr>
-<tr><td colspan="2">{{response}}</td></tr>
-<tr><td colspan="2"><input type="submit" value="SEND"></td></tr>
-</table>
-</form>
+    <h1 align="center">HERE YOU CAN TIME TRAVEL TO 2030 AFTER HTTP3 GOT WIDELY ADOPTED</h1>
+    <form style="width:100%;display:flex;justify-content:center;" action="/" method="POST">
+    <table style="table-layout: fixed;">
+        <tr><th>PRESET:</th><th>
+            <select onchange="updateFields()" id="preset_select">
+                <option value="/">/</option>
+                <option value="/login">/login</option>
+                <option value="/register">/register</option>
+                <option value="/profile">/profile</option>
+                <option value="/addphone">/addphone</option>
+                <option value="/addnote">/addnote</option>
+                <option value="/notes">/notes</option>
+            </select>
+        </th></tr>
+        <tr><th>URL:</th><th><input type="text" name="url" id="url" value="{{url}}" /></th></tr>
+        <tr><th>METHOD:</th><th><input type="text" name="method" id="method" value="{{method}}" /></th></tr>
+        <tr><th>HEADER 1:</th><th><input type="text" name="header1" id="header1" value="{{header1}}" /></th></tr>
+        <tr><th>HEADER 2:</th><th><input type="text" name="header2" id="header2" value="{{header2}}" /></th></tr>
+        <tr><th>PAYLOAD (BODY):</th><th><textarea id="payload" name="payload" rows="4" cols="50">{{payload}}</textarea></th></tr>
+        <tr><th>RESPONSE (ONLY BODY):</th></tr>
+        <tr><td colspan="2" style="word-break: break-all;"><pre><code style="min-width: 100%;width: 0px;overflow: auto;" class="language-json">{{response}}</code></pre></td></tr>
+        <tr><td colspan="2"><input type="submit" value="SEND"></td></tr>
+    </table>
+    </form>
+    <script src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/highlight.min.js"></script>
+    <script>hljs.highlightAll();</script>
+    <script>
+        const BASEURL="https://proxy:4433";
+        const resp = atob("{{responseB64}}");
+        if(resp !== "" && !resp.includes("WORKING")){
+            const respJson = JSON.parse(resp);
+            if ("token" in respJson) {
+                localStorage.setItem("token", respJson["token"]);
+            }
+        }
+        function updateFields(){
+            const token = localStorage.getItem("token");
+            predefs = {
+                "/": {
+                    "url": BASEURL + "/",
+                    "method": "GET",
+                    "payload": "",
+                    "header1": "", "header2": "",
+                },
+                "/login": {
+                    "url": BASEURL + "/login",
+                    "method": "POST",
+                    "payload": "username=user&password=pass",
+                    "header1": "", "header2": "",
+                },
+                "/register": {
+                    "url": BASEURL + "/register",
+                    "method": "POST",
+                    "payload": "username=user&password=pass",
+                    "header1": "", "header2": "",
+                },
+                "/profile": {
+                    "url": BASEURL + "/profile",
+                    "method": "GET",
+                    "payload": "",
+                    "header1": "x-token: " + token, "header2": "",
+                },
+                "/addphone": {
+                    "url": BASEURL + "/addphone",
+                    "method": "POST",
+                    "payload": "phone=0",
+                    "header1": "x-token: " + token, "header2": "",
+                },
+                "/addnote": {
+                    "url": BASEURL + "/addnote",
+                    "method": "POST",
+                    "payload": "note=1235",
+                    "header1": "x-token: " + token, "header2": "",
+                },
+                "/notes": {
+                    "url": BASEURL + "/notes/user",
+                    "method": "GET",
+                    "payload": "",
+                    "header1": "x-token: " + token, "header2": "",
+                },
+            }
+            const predefKey = document.getElementById("preset_select").value;
+            const vals = predefs[predefKey];
+            document.getElementById("url").value = vals.url;
+            document.getElementById("method").value = vals.method;
+            document.getElementById("header1").value = vals.header1;
+            document.getElementById("header2").value = vals.header2;
+            document.getElementById("payload").value = vals.payload;
+        }
+    </script>
 </body>
 </html>

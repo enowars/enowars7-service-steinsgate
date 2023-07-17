@@ -12,5 +12,7 @@ services:
       - "4433:4433/udp"
   interface:
     build: src/interface
+    links:
+      - "proxy:proxy"
     ports:
       - "4420:4420"

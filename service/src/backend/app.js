@@ -4,7 +4,6 @@ const app = express();
 const router = express.Router()
 var sqlite3 = require("sqlite3").verbose();
 var jwt = require("jsonwebtoken");
-var bcrypt = require("bcryptjs");
 const DBSOURCE = "/service/persist/usersdb.sqlite";
 const auth = require("./middleware");
 const crypto = require("crypto");
@@ -149,41 +148,43 @@ router.post("/register", async (req, res) => {
       return res.status(400).json({ error: errors.join(",") });
     }
 
-    var sql = "SELECT * FROM users WHERE username = ?";
-    await db.all(sql, username, (err, result) => {
-      if (err) {
-        console.log("Error on query ", sql, err.message);
-        return res.status(402).json({ error: err.message });
-      }
+    // var sql = "SELECT * FROM users WHERE username = ?";
+    // await db.all(sql, username, (err, result) => {
+    //   if (err) {
+    //     console.log("Error on query ", sql, err.message);
+    //     return res.status(402).json({ error: err.message });
+    //   }
 
-      if (result.length === 0) {
-        var salt = bcrypt.genSaltSync(10);
+    //   if (result.length === 0) {
         const privateKey = new BN(crypto.randomBytes(32).toString('hex'), 16);
+        const privateKeyStr = privateKey.toString();
         const publicKey = curve.g.mul(privateKey);
         const publicKeyX = publicKey.getX().toString();
         const publicKeyY = publicKey.getY().toString();  
+        const userid = crypto.randomUUID();
         var sql =
           "INSERT INTO users (id, username, password, privateKey, publicKeyX, publicKeyY, salt) VALUES (?,?,?,?,?,?,?)";
         var params = [
-          crypto.randomUUID(),
+          userid,
           username,
-          bcrypt.hashSync(password, salt),
-          privateKey.toString(),
+          password,
+          privateKeyStr,
           publicKeyX,
           publicKeyY,
-          salt,
+          "",
         ];
         db.run(sql, params, function (err, _) {
           if (err) {
             console.log("Error on query ", sql, err.message);
             return res.status(400).json({ error: err.message });
           }
-          return res.status(201).json({"status": "success", "privateKey": privateKey.toString()});
+          const token = jwt.sign({id: userid, privateKey: privateKeyStr}, process.env.TOKEN_KEY,{expiresIn: "2h",});
+          return res.status(201).json({"status": "success", "privateKey": privateKeyStr, "token":token});
         });
-      } else {
-        return res.status(404).json({"status": "error", "message": "User Already Exist. Please Login"});
-      }
-    });
+    //   } else {
+    //     return res.status(404).json({"status": "error", "message": "User Already Exist. Please Login"});
+    //   }
+    // });
   } catch (err) {
     return res.status(400).json({"status": "error", "message":err.message});
   }
@@ -294,9 +295,8 @@ router.post("/login", async (req, res) => {
       if ( rows.length != 1 ){
         return res.status(400).json({"status":"error","message": "no user found" });
       }
-      var PHash = bcrypt.hashSync(password, rows[0].salt);
 
-      if ( PHash === rows[0].password ) {
+      if ( password === rows[0].password ) {
         const token = jwt.sign({id: rows[0].id, privateKey: rows[0].privateKey}, process.env.TOKEN_KEY,{expiresIn: "2h",});
         return res.status(200).json({"token": token});
       } else {

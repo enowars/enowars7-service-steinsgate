@@ -136,7 +136,8 @@ async def do_register(task: PutflagCheckerTaskMessage, logger: LoggerAdapter, us
     status, headers, body = await do_post(task.address, PORT, path, {}, urlencode(payload, quote_via=quote_plus))
     assert_status_code(logger, path, status, headers, body, code=201)
     try:
-        return json.loads(body)["privateKey"]
+        bd = json.loads(body)
+        return bd["privateKey"], bd["token"]
     except (json.JSONDecodeError, TypeError) as k:
         logger.error(f"Error decoding body, {k.msg}")
         raise MumbleException(f"Error decoding body for register")
@@ -147,8 +148,8 @@ async def do_register(task: PutflagCheckerTaskMessage, logger: LoggerAdapter, us
 async def putflag(task: PutflagCheckerTaskMessage, logger: LoggerAdapter, db: ChainDB) -> str:
     username = noise(10, 20)
     password = noise(10, 20)
-    await do_register(task, logger, username, password)
-    token = await do_login(task, logger, username, password)
+    _, token = await do_register(task, logger, username, password)
+    # await do_login(task, logger, username, password)
     await do_addphone(task, logger, task.flag, token=token)
     await db.set("info", token)
     return username
@@ -157,8 +158,8 @@ async def putflag(task: PutflagCheckerTaskMessage, logger: LoggerAdapter, db: Ch
 async def putflag_enc(task: PutflagCheckerTaskMessage, logger: LoggerAdapter, db: ChainDB) -> str:
     username = noise(10, 20)
     password = noise(10, 20)
-    privateKey = await do_register(task, logger, username, password)
-    token = await do_login(task, logger, username, password)
+    privateKey, token = await do_register(task, logger, username, password)
+    # token = await do_login(task, logger, username, password)
     await do_addnote(task, logger, task.flag, token=token)
     await db.set("infopflag", (token, username))
     await db.set("privateKeypflag", privateKey)
@@ -229,8 +230,8 @@ async def putnoise(task: PutnoiseCheckerTaskMessage, logger: LoggerAdapter, db: 
     # return
     username = noise(10, 20)
     password = noise(10, 20)
-    await do_register(task, logger, username, password)
-    token = await do_login(task, logger, username, password)
+    _, token = await do_register(task, logger, username, password)
+    # token = await do_login(task, logger, username, password)
     phone = randomPhone()
     await do_addphone(task, logger, phone, token=token)
     await db.set("info1", (token, phone))
@@ -260,7 +261,15 @@ async def getnoise(task: GetnoiseCheckerTaskMessage, logger: LoggerAdapter, db: 
 
 @checker.havoc(0)
 async def havoc_safado(task: HavocCheckerTaskMessage, logger: LoggerAdapter, db: ChainDB):
-    pass
+    # return
+    username = noise(10, 20)
+    password = noise(10, 20)
+    _, token = await do_register(task, logger, username, password)
+    # token = await do_login(task, logger, username, password)
+    path = f"/user/{username}"
+    status, headers, body = await do_get(task.address, PORT, path, {"x-token":token})
+    assert_status_code(logger, path, status, headers, body, code=403)
+    assert_in("Cant do that", body, "You must protect your /user!")
 
 @checker.havoc(1)
 async def havoc_hacker(task: HavocCheckerTaskMessage, logger: LoggerAdapter, db: ChainDB):
@@ -281,8 +290,8 @@ async def putnoise_enc(task: PutnoiseCheckerTaskMessage, logger: LoggerAdapter, 
     # return
     username = noise(10, 20)
     password = noise(10, 20)
-    privateKey = await do_register(task, logger, username, password)
-    token = await do_login(task, logger, username, password)
+    privateKey, token = await do_register(task, logger, username, password)
+    # token = await do_login(task, logger, username, password)
     noteFromDB = noise(20, 30)
     await do_addnote(task, logger, noteFromDB, token=token)
     await db.set("infopnoise", (token, username))
@@ -336,8 +345,8 @@ async def exploit_simple_smugling(task: ExploitCheckerTaskMessage, logger: Logge
 
     username, password = noise(10, 20), noise(10, 20)
 
-    await do_register(task, logger, username, password)
-    token = await do_login(task, logger, username, password)
+    _, token = await do_register(task, logger, username, password)
+    # token = await do_login(task, logger, username, password)
     path = f"/user/{username_to_hack}"
     true_path = "/ HTTP/1.1\r\nHost: localhost\r\n\r\nGET " + path #Request smuggling
     status, headers, body = await do_request_fakepath(task.address, PORT, "GET", path, true_path, {"x-token":token}, None)
@@ -356,8 +365,8 @@ async def exploit_smart_attack(task: ExploitCheckerTaskMessage, logger: LoggerAd
 
     username, password = noise(10, 20), noise(10, 20)
 
-    await do_register(task, logger, username, password)
-    token = await do_login(task, logger, username, password)
+    _, token = await do_register(task, logger, username, password)
+    # token = await do_login(task, logger, username, password)
     r = await do_notes(task, logger, username_to_hack, token=token)
     if "data" in r:
         if len(r["data"]) != 0:

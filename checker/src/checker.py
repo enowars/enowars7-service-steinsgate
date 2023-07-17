@@ -227,7 +227,7 @@ async def getflag_enc(task: GetflagCheckerTaskMessage, logger: LoggerAdapter, db
 
 @checker.putnoise(0)
 async def putnoise(task: PutnoiseCheckerTaskMessage, logger: LoggerAdapter, db: ChainDB):
-    # return
+    return
     username = noise(10, 20)
     password = noise(10, 20)
     _, token = await do_register(task, logger, username, password)
@@ -238,7 +238,7 @@ async def putnoise(task: PutnoiseCheckerTaskMessage, logger: LoggerAdapter, db: 
 
 @checker.getnoise(0)
 async def getnoise(task: GetnoiseCheckerTaskMessage, logger: LoggerAdapter, db: ChainDB):
-    # return
+    return
     try:
         token, phone = await db.get("info1")
     except KeyError:
@@ -261,7 +261,7 @@ async def getnoise(task: GetnoiseCheckerTaskMessage, logger: LoggerAdapter, db: 
 
 @checker.havoc(0)
 async def havoc_safado(task: HavocCheckerTaskMessage, logger: LoggerAdapter, db: ChainDB):
-    # return
+    return
     username = noise(10, 20)
     password = noise(10, 20)
     _, token = await do_register(task, logger, username, password)
@@ -293,6 +293,9 @@ async def putnoise_enc(task: PutnoiseCheckerTaskMessage, logger: LoggerAdapter, 
     privateKey, token = await do_register(task, logger, username, password)
     # token = await do_login(task, logger, username, password)
     noteFromDB = noise(20, 30)
+    phone = randomPhone()
+    await do_addphone(task, logger, phone, token=token)
+    await db.set("info1", (token, phone))
     await do_addnote(task, logger, noteFromDB, token=token)
     await db.set("infopnoise", (token, username))
     await db.set("privateKeypnoise", (privateKey, noteFromDB))
@@ -307,6 +310,25 @@ async def getnoise_check_note(task: GetnoiseCheckerTaskMessage, logger: LoggerAd
         privateKey, noteFromDB = await db.get("privateKeypnoise")
     except KeyError:
         raise MumbleException("Database info missing")
+    try:
+        token, phone = await db.get("info1")
+    except KeyError:
+        raise MumbleException("Database info1 missing")
+    r = await do_profile(task, logger, token=token)
+    if "data" in r:
+        if len(r["data"]) != 0:
+            if "phones" in r["data"][0]:
+                phones = r["data"][0]["phones"]
+                assert_in(phone, phones, f"Phone missing in profile")
+            else:
+                logger.debug(f"Phones are missing for team {task.team_name}")
+                raise MumbleException("Phones are missing in profile response")
+        else:
+            logger.debug(f"Data is empty in profile response for team {task.team_name}")
+            raise MumbleException("Data is empty in profile response")
+    else:
+        logger.debug(f"Data is missing in profile response for team {task.team_name}")
+        raise MumbleException("Data is missing in profile response")
     r = await do_notes(task, logger, uname, token=token)
     if "data" in r:
         if len(r["data"]) != 0:

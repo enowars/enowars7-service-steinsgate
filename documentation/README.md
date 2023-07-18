@@ -12,7 +12,7 @@ The service is made of 3 containers, which are running in the same network.
 
 `docker compose up --build -d`
 
-## Vulnerability 1
+## Vulnerability 1 - HTTP Request Smuggling
 
 The vulnerability is an inconsistent interpretation of HTTP requests in the translation of HTTP/3 to HTTP/1.1. The reverse proxy has deny rules and there are multiple ways of exploiting it, one way is to send a request like this:
 
@@ -33,7 +33,7 @@ The vulnerability is an inconsistent interpretation of HTTP requests in the tran
 
 * ~~We need to be carefull because someone could smuggle the checker's requests. Is this considered attacking infrastructure?~~ This is not possible because sockets are not reused, we create a new one for each http3 request.
 
-## Vulnerability 2
+## Vulnerability 2 - Anomalous Curve
 
 We are given a encrypted note system, each note is AES encrypted with the private key of a user. The issue is that the curve used to generate the public key is anomalous, so anyone can transfer the problem from a DLP in a multiplicative group to a DLP in a additive group in the p-adic field of the prime that generates the curve group. This is known as Smart Attack. For reference https://arxiv.org/abs/1702.07107
 

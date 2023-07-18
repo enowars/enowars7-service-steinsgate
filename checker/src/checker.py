@@ -224,54 +224,7 @@ async def getflag_enc(task: GetflagCheckerTaskMessage, logger: LoggerAdapter, db
         logger.debug(f"Data is missing in notes response for team {task.team_name}")
         raise MumbleException("Data is missing in notes response")
 
-
-@checker.putnoise(0)
-async def putnoise(task: PutnoiseCheckerTaskMessage, logger: LoggerAdapter, db: ChainDB):
-    return
-    username = noise(10, 20)
-    password = noise(10, 20)
-    _, token = await do_register(task, logger, username, password)
-    # token = await do_login(task, logger, username, password)
-    phone = randomPhone()
-    await do_addphone(task, logger, phone, token=token)
-    await db.set("info1", (token, phone))
-
-@checker.getnoise(0)
-async def getnoise(task: GetnoiseCheckerTaskMessage, logger: LoggerAdapter, db: ChainDB):
-    return
-    try:
-        token, phone = await db.get("info1")
-    except KeyError:
-        raise MumbleException("Database info1 missing")
-    r = await do_profile(task, logger, token=token)
-    if "data" in r:
-        if len(r["data"]) != 0:
-            if "phones" in r["data"][0]:
-                phones = r["data"][0]["phones"]
-                assert_in(phone, phones, f"Phone missing in profile")
-            else:
-                logger.debug(f"Phones are missing for team {task.team_name}")
-                raise MumbleException("Phones are missing in profile response")
-        else:
-            logger.debug(f"Data is empty in profile response for team {task.team_name}")
-            raise MumbleException("Data is empty in profile response")
-    else:
-        logger.debug(f"Data is missing in profile response for team {task.team_name}")
-        raise MumbleException("Data is missing in profile response")
-
 @checker.havoc(0)
-async def havoc_safado(task: HavocCheckerTaskMessage, logger: LoggerAdapter, db: ChainDB):
-    return
-    username = noise(10, 20)
-    password = noise(10, 20)
-    _, token = await do_register(task, logger, username, password)
-    # token = await do_login(task, logger, username, password)
-    path = f"/user/{username}"
-    status, headers, body = await do_get(task.address, PORT, path, {"x-token":token})
-    assert_status_code(logger, path, status, headers, body, code=403)
-    assert_in("Cant do that", body, "You must protect your /user!")
-
-@checker.havoc(1)
 async def havoc_hacker(task: HavocCheckerTaskMessage, logger: LoggerAdapter, db: ChainDB):
     # return
     path = "/login"
@@ -281,11 +234,7 @@ async def havoc_hacker(task: HavocCheckerTaskMessage, logger: LoggerAdapter, db:
     status, headers, body = await do_post(task.address, PORT, path, {}, urlencode(payload, quote_via=quote_plus))
     assert_status_code(logger, path, status, headers, body, 400)
 
-@checker.havoc(2)
-async def havoc_healthcheck(task: HavocCheckerTaskMessage, logger: LoggerAdapter, db: ChainDB):
-    pass
-
-@checker.putnoise(1)
+@checker.putnoise(0)
 async def putnoise_enc(task: PutnoiseCheckerTaskMessage, logger: LoggerAdapter, db: ChainDB) -> str:
     # return
     username = noise(10, 20)
@@ -302,7 +251,7 @@ async def putnoise_enc(task: PutnoiseCheckerTaskMessage, logger: LoggerAdapter, 
     return username
 
 
-@checker.getnoise(1)
+@checker.getnoise(0)
 async def getnoise_check_note(task: GetnoiseCheckerTaskMessage, logger: LoggerAdapter, db: ChainDB) -> None:
     # return
     try:
@@ -311,7 +260,7 @@ async def getnoise_check_note(task: GetnoiseCheckerTaskMessage, logger: LoggerAd
     except KeyError:
         raise MumbleException("Database info missing")
     try:
-        token, phone = await db.get("info1")
+        _, phone = await db.get("info1")
     except KeyError:
         raise MumbleException("Database info1 missing")
     r = await do_profile(task, logger, token=token)
@@ -332,26 +281,46 @@ async def getnoise_check_note(task: GetnoiseCheckerTaskMessage, logger: LoggerAd
     r = await do_notes(task, logger, uname, token=token)
     if "data" in r:
         if len(r["data"]) != 0:
-            foundFlag = False
-            for i in range(len(r["data"])):
-                data = r["data"][i]
-                if data["username"] != uname:
-                    continue
-                if "note" in data and "noteIv" in data:
-                    note = binascii.unhexlify(base64.b64decode(data["note"]).decode())
-                    noteIv = data["noteIv"]
-                    key = hashlib.sha512(privateKey.encode()).hexdigest()[:32].encode()
-                    iv = base64.b64decode(noteIv.encode())
-                    noteDecrypted = AES.new(key, AES.MODE_CBC, iv=iv).decrypt(note)
-                    if noteFromDB.encode() in noteDecrypted:
-                        foundFlag = True
-                        break
-                else:
-                    logger.debug(f"Notes are missing for team {task.team_name}")
-                    raise MumbleException("Notes are missing in response")
-            if not foundFlag:
-                logger.debug(f"Note missing (getnoise) for team {task.team_name}")
-                raise MumbleException("Note missing")
+            CurveInfo = r["curve"]
+            if len(r["data"]) != 0 and "a" in CurveInfo and "b" in CurveInfo and "p" in CurveInfo and "gx" in CurveInfo and "gy" in CurveInfo:
+                foundFlag = False
+                for i in range(len(r["data"])):
+                    data = r["data"][i]
+                    if data["username"] != uname:
+                        continue
+                    if "publicKeyX" in data and "publicKeyY" in data:
+                        try:
+                            x, y = int(data["publicKeyX"]), int(data["publicKeyY"])
+                            pkey = int(privateKey)
+                            curve = ecc.CurveOverFp(0, int(CurveInfo["a"]), int(CurveInfo["b"]), int(CurveInfo["p"]))
+                            curve_g = ecc.Point(int(CurveInfo["gx"]), int(CurveInfo["gy"]))
+                            if curve.mult(curve_g, pkey) != ecc.Point(x, y):
+                                logger.debug(f"Public Key is wrong {task.team_name}")
+                                raise MumbleException(f"Public key is wrong")
+                        except Exception as e:
+                            logger.debug(f"Public Key is in wrong format {task.team_name}, {e}")
+                            raise MumbleException(f"Public key is in wrong format")
+                    else:
+                        logger.debug(f"Public Key is missing for team {task.team_name}")
+                        raise MumbleException("Public key is missing in response")
+                    if "note" in data and "noteIv" in data:
+                        note = binascii.unhexlify(base64.b64decode(data["note"]).decode())
+                        noteIv = data["noteIv"]
+                        key = hashlib.sha512(privateKey.encode()).hexdigest()[:32].encode()
+                        iv = base64.b64decode(noteIv.encode())
+                        noteDecrypted = AES.new(key, AES.MODE_CBC, iv=iv).decrypt(note)
+                        if noteFromDB.encode() in noteDecrypted:
+                            foundFlag = True
+                            break
+                    else:
+                        logger.debug(f"Notes are missing for team {task.team_name}")
+                        raise MumbleException("Notes are missing in response")
+                if not foundFlag:
+                    logger.debug(f"Note missing (getnoise) for team {task.team_name}")
+                    raise MumbleException("Note missing")
+            else:
+                logger.debug(f"Data or curve is in wrong format for team {task.team_name}")
+                raise MumbleException("Data or curve is in wrong format")
         else:
             logger.debug(f"Data is empty in notes response for team {task.team_name}")
             raise MumbleException("Data is empty in notes response")

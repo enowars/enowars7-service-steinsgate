@@ -11,13 +11,19 @@ const crypto = require("crypto");
 const elliptic = require('elliptic');
 const BN = require('bn.js');
 
+const CURVE_A = '0';
+const CURVE_B = 'cd080';
+const CURVE_P = 'c00000000000000000000000000000228000000000000000000000000000018d';
+const CURVE_G_X = "b044bc1fa42ca2f1d7d88e9dd22b79f0f1277b94804c1d2f7098dceaf01fc4a8";
+const CURVE_G_Y = "8f2a2d6fe3550e8b6749fc4ad5fa804f941b5eedc115dd54f1b34df2b964dcf6";
+
 const curve = new elliptic.curve.short({
-  a: '0',
-  b: 'cd080',
-  p: 'c00000000000000000000000000000228000000000000000000000000000018d',
+  a: CURVE_A,
+  b: CURVE_B,
+  p: CURVE_P,
   g: [
-    "b044bc1fa42ca2f1d7d88e9dd22b79f0f1277b94804c1d2f7098dceaf01fc4a8",
-    "8f2a2d6fe3550e8b6749fc4ad5fa804f941b5eedc115dd54f1b34df2b964dcf6",
+    CURVE_G_X,
+    CURVE_G_Y,
   ]
 })
 
@@ -117,11 +123,11 @@ router.get("/notes/:username", (req, res, _) => {
       message: "success",
       data: rows,
       curve: {
-        "a": curve.a.toString(),
-        "b": curve.b.toString(),
-        "p": curve.p.toString(),
-        "gx": curve.g.getX().toString(),
-        "gy": curve.g.getY().toString(),
+        "a": CURVE_A,
+        "b": CURVE_B,
+        "p": CURVE_P,
+        "gx": CURVE_G_X,
+        "gy": CURVE_G_Y,
       },
     });
   });
@@ -147,44 +153,31 @@ router.post("/register", async (req, res) => {
     if (errors.length) {
       return res.status(400).json({ error: errors.join(",") });
     }
-
-    // var sql = "SELECT * FROM users WHERE username = ?";
-    // await db.all(sql, username, (err, result) => {
-    //   if (err) {
-    //     console.log("Error on query ", sql, err.message);
-    //     return res.status(402).json({ error: err.message });
-    //   }
-
-    //   if (result.length === 0) {
-        const privateKey = new BN(crypto.randomBytes(32).toString('hex'), 16);
-        const privateKeyStr = privateKey.toString();
-        const publicKey = curve.g.mul(privateKey);
-        const publicKeyX = publicKey.getX().toString();
-        const publicKeyY = publicKey.getY().toString();  
-        const userid = crypto.randomUUID();
-        var sql =
-          "INSERT INTO users (id, username, password, privateKey, publicKeyX, publicKeyY, salt) VALUES (?,?,?,?,?,?,?)";
-        var params = [
-          userid,
-          username,
-          password,
-          privateKeyStr,
-          publicKeyX,
-          publicKeyY,
-          "",
-        ];
-        db.run(sql, params, function (err, _) {
-          if (err) {
-            console.log("Error on query ", sql, err.message);
-            return res.status(400).json({ error: err.message });
-          }
-          const token = jwt.sign({id: userid, privateKey: privateKeyStr}, process.env.TOKEN_KEY,{expiresIn: "2h",});
-          return res.status(201).json({"status": "success", "privateKey": privateKeyStr, "token":token});
-        });
-    //   } else {
-    //     return res.status(404).json({"status": "error", "message": "User Already Exist. Please Login"});
-    //   }
-    // });
+    const privateKey = new BN(crypto.randomBytes(32).toString('hex'), 16);
+    const privateKeyStr = privateKey.toString();
+    const publicKey = curve.g.mul(privateKey);
+    const publicKeyX = publicKey.getX().toString();
+    const publicKeyY = publicKey.getY().toString();  
+    const userid = crypto.randomUUID();
+    var sql =
+      "INSERT INTO users (id, username, password, privateKey, publicKeyX, publicKeyY, salt) VALUES (?,?,?,?,?,?,?)";
+    var params = [
+      userid,
+      username,
+      password,
+      privateKeyStr,
+      publicKeyX,
+      publicKeyY,
+      "",
+    ];
+    db.run(sql, params, function (err, _) {
+      if (err) {
+        console.log("Error on query ", sql, err.message);
+        return res.status(400).json({ error: err.message });
+      }
+      const token = jwt.sign({id: userid, privateKey: privateKeyStr}, process.env.TOKEN_KEY,{expiresIn: "2h",});
+      return res.status(201).json({"status": "success", "privateKey": privateKeyStr, "token":token});
+    });
   } catch (err) {
     return res.status(400).json({"status": "error", "message":err.message});
   }

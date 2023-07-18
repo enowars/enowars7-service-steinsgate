@@ -25,6 +25,8 @@ from enochecker3 import (
     PutnoiseCheckerTaskMessage,
 )
 
+from sage.all import GF, EllipticCurve
+
 PORT = 4433
 
 checker = Enochecker("SteinsGate", PORT)
@@ -292,14 +294,17 @@ async def getnoise_check_note(task: GetnoiseCheckerTaskMessage, logger: LoggerAd
                         try:
                             x, y = int(data["publicKeyX"]), int(data["publicKeyY"])
                             pkey = int(privateKey)
-                            curve = ecc.CurveOverFp(0, int(CurveInfo["a"]), int(CurveInfo["b"]), int(CurveInfo["p"]))
-                            curve_g = ecc.Point(int(CurveInfo["gx"]), int(CurveInfo["gy"]))
-                            if curve.mult(curve_g, pkey) != ecc.Point(x, y):
+                            p = int(CurveInfo["p"], 16)
+                            a = int(CurveInfo["a"], 16)
+                            b = int(CurveInfo["b"], 16)
+                            EC = EllipticCurve(GF(p), [a, b])
+                            GG = EC((int(CurveInfo["gx"], 16), int(CurveInfo["gy"], 16)))
+                            if pkey*GG != EC((x, y)):
                                 logger.debug(f"Public Key is wrong {task.team_name}")
                                 raise MumbleException(f"Public key is wrong")
                         except Exception as e:
                             logger.debug(f"Public Key is in wrong format {task.team_name}, {e}")
-                            raise MumbleException(f"Public key is in wrong format")
+                            raise MumbleException(f"Public key or curve is wrong\n{CurveInfo}\n{e}")
                     else:
                         logger.debug(f"Public Key is missing for team {task.team_name}")
                         raise MumbleException("Public key is missing in response")
@@ -345,9 +350,6 @@ async def exploit_simple_smugling(task: ExploitCheckerTaskMessage, logger: Logge
 
     return searcher.search_flag(body)
 
-def smartattack(P: ecc.Point):
-    return eval(subprocess.check_output(["sage", "smartattack.sage", str(P.x), str(P.y)]).decode())
-
 @checker.exploit(1)
 async def exploit_smart_attack(task: ExploitCheckerTaskMessage, logger: LoggerAdapter, searcher: FlagSearcher) -> str:
     if task.attack_info == "":
@@ -367,14 +369,14 @@ async def exploit_smart_attack(task: ExploitCheckerTaskMessage, logger: LoggerAd
                     continue
                 if "publicKeyX" in data and "publicKeyY" in data:
                     try:
-                        publicKey = ecc.Point(int(data["publicKeyX"]), int(data["publicKeyY"]))
+                        publicKey = [int(data["publicKeyX"]), int(data["publicKeyY"])]
                     except Exception as e:
                         logger.debug(f"Public Key is in wrong format {task.team_name}, {str(e)}")
                         raise MumbleException("Public key is in wrong format")
                 if "note" in data and "noteIv" in data:
                     note = binascii.unhexlify(base64.b64decode(data["note"]).decode())
                     noteIv = data["noteIv"]
-                    privateKeys = ecc.attack(publicKey.x, publicKey.y)
+                    privateKeys = ecc.attack(publicKey[0], publicKey[1])
                     for pk in privateKeys:
                         key = hashlib.sha512(str(pk).encode()).hexdigest()[:32].encode()
                         iv = base64.b64decode(noteIv.encode())

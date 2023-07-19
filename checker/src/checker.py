@@ -246,7 +246,7 @@ async def havoc_placeholder2(task: HavocCheckerTaskMessage, logger: LoggerAdapte
 
 @checker.putnoise(1)
 async def putnoise_placeholder(task: PutnoiseCheckerTaskMessage, logger: LoggerAdapter, db: ChainDB) -> str:
-    return ""
+    return
 
 @checker.getnoise(1)
 async def getnoise_placeholder(task: GetnoiseCheckerTaskMessage, logger: LoggerAdapter, db: ChainDB) -> None:

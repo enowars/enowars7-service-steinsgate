@@ -2,16 +2,19 @@ version: "3.9"
 services:
   backend:
     build: src/backend/
+    restart: unless-stopped
     volumes:
       - ./persist/:/service/persist:rw
   proxy:
     build: src/proxy/
+    restart: unless-stopped
     links:
       - "backend:backend"
     ports:
       - "4433:4433/udp"
   interface:
     build: src/interface
+    restart: unless-stopped
     links:
       - "proxy:proxy"
     ports:

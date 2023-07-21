@@ -236,21 +236,21 @@ async def havoc_hacker(task: HavocCheckerTaskMessage, logger: LoggerAdapter, db:
     status, headers, body = await do_post(task.address, PORT, path, {}, urlencode(payload, quote_via=quote_plus))
     assert_status_code(logger, path, status, headers, body, 400)
 
-@checker.havoc(1)
-async def havoc_placeholder(task: HavocCheckerTaskMessage, logger: LoggerAdapter, db: ChainDB):
-    return
+# @checker.havoc(1)
+# async def havoc_placeholder(task: HavocCheckerTaskMessage, logger: LoggerAdapter, db: ChainDB):
+#     return
 
-@checker.havoc(2)
-async def havoc_placeholder2(task: HavocCheckerTaskMessage, logger: LoggerAdapter, db: ChainDB):
-    return
+# @checker.havoc(2)
+# async def havoc_placeholder2(task: HavocCheckerTaskMessage, logger: LoggerAdapter, db: ChainDB):
+#     return
 
-@checker.putnoise(1)
-async def putnoise_placeholder(task: PutnoiseCheckerTaskMessage, logger: LoggerAdapter, db: ChainDB) -> str:
-    return
+# @checker.putnoise(1)
+# async def putnoise_placeholder(task: PutnoiseCheckerTaskMessage, logger: LoggerAdapter, db: ChainDB) -> str:
+#     return
 
-@checker.getnoise(1)
-async def getnoise_placeholder(task: GetnoiseCheckerTaskMessage, logger: LoggerAdapter, db: ChainDB) -> None:
-    return
+# @checker.getnoise(1)
+# async def getnoise_placeholder(task: GetnoiseCheckerTaskMessage, logger: LoggerAdapter, db: ChainDB) -> None:
+#     return
 
 @checker.putnoise(0)
 async def putnoise_enc(task: PutnoiseCheckerTaskMessage, logger: LoggerAdapter, db: ChainDB) -> str:
